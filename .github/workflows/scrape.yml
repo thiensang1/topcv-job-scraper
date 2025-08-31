@@ -1,0 +1,181 @@
+# --- QUY TRÌNH TỰ ĐỘNG HÓA HOÀN CHỈNH - PHIÊN BẢN PROXY ---
+# Tên file: .github/workflows/scrape.yml
+
+name: 'TopCV Daily Scraper'
+
+on:
+  # Chạy tự động vào 7 giờ sáng mỗi ngày (giờ Việt Nam)
+  schedule:
+    - cron: '0 0 * * *' # Nửa đêm giờ UTC, tương đương 7h sáng giờ VN
+  # Cho phép chạy thủ công từ tab Actions trên GitHub
+  workflow_dispatch:
+
+jobs:
+  # --- GIAI ĐOẠN 1: TRINH SÁT ---
+  discover:
+    runs-on: ubuntu-latest
+    outputs:
+      # Xuất ra tổng số trang để các job sau có thể sử dụng
+      totalPages: ${{ steps.get_pages.outputs.count }}
+    steps:
+      - name: 'Checkout repository'
+        uses: actions/checkout@v3
+
+      - name: 'Set up Node.js'
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+
+      - name: 'Install dependencies for scout'
+        run: npm install puppeteer-extra puppeteer-extra-plugin-stealth
+
+      - name: 'Run scout script to get total pages'
+        id: get_pages
+        # Chạy script trinh sát và lưu kết quả vào output
+        run: echo "count=$(node discover_pages.js)" >> $GITHUB_OUTPUT
+
+  # --- GIAI ĐOẠN 2: KHAI THÁC SONG SONG ---
+  collect:
+    # Cần job 'discover' hoàn thành trước
+    needs: discover
+    runs-on: ubuntu-latest
+
+    strategy:
+      # Chạy song song, nếu một worker lỗi, các worker khác vẫn tiếp tục
+      fail-fast: false
+      matrix:
+        # Triển khai 15 "công nhân", bạn có thể tăng/giảm nếu cần
+        # Ví dụ: 15 công nhân, mỗi người 10 trang -> 150 trang tối đa
+        worker: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15] 
+
+    steps:
+      - name: 'Checkout repository'
+        uses: actions/checkout@v3
+
+      - name: 'Set up Node.js'
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          cache: 'npm'
+      
+      - name: 'Install dependencies for collector'
+        run: npm install puppeteer-extra puppeteer-extra-plugin-stealth cheerio csv-stringify date-fns
+
+      - name: 'Run collection worker'
+        # Cung cấp "chỉ thị" (thông tin proxy bí mật) cho công nhân
+        env:
+          PROXY_HOST: ${{ secrets.PROXY_HOST }}
+          PROXY_PORT: ${{ secrets.PROXY_PORT }}
+          PROXY_USER: ${{ secrets.PROXY_USER }}
+          PROXY_PASS: ${{ secrets.PROXY_PASS }}
+        run: |
+          # Tính toán khoảng trang cho mỗi worker
+          PAGES_PER_WORKER=10
+          TOTAL_PAGES=${{ needs.discover.outputs.totalPages }}
+          WORKER_INDEX=${{ matrix.worker }}
+          
+          START_PAGE=$(( (WORKER_INDEX - 1) * PAGES_PER_WORKER + 1 ))
+          END_PAGE=$(( WORKER_INDEX * PAGES_PER_WORKER ))
+          
+          # Đảm bảo worker cuối cùng không chạy quá tổng số trang
+          if (( END_PAGE > TOTAL_PAGES )); then
+            END_PAGE=$TOTAL_PAGES
+          fi
+          
+          # Chỉ chạy nếu trang bắt đầu là hợp lệ
+          if (( START_PAGE <= TOTAL_PAGES )); then
+            node collector.js "ke-toan" $START_PAGE $END_PAGE $WORKER_INDEX
+          else
+            echo "Worker ${{ matrix.worker }} không cần chạy."
+          fi
+      
+      - name: 'Upload worker artifact'
+        # Tải lên kết quả của worker để job cuối cùng có thể gom lại
+        uses: actions/upload-artifact@v3
+        with:
+          name: raw-results-${{ matrix.worker }}
+          path: results_worker_${{ matrix.worker }}.csv
+          if-no-files-found: ignore
+
+  # --- GIAI ĐOẠN 3: TỔNG HỢP VÀ LƯU TRỮ ---
+  combine-and-commit:
+    needs: collect
+    runs-on: ubuntu-latest
+    steps:
+      - name: 'Checkout repository'
+        uses: actions/checkout@v3
+
+      - name: 'Set up Node.js'
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+
+      - name: 'Download all worker artifacts'
+        uses: actions/download-artifact@v3
+        with:
+          path: ./raw-results
+      
+      - name: 'Install dependencies for combination script'
+        run: npm install csv-parse csv-stringify
+
+      - name: 'Combine results and check for duplicates'
+        id: combine
+        # Chạy một script nhỏ để gom các file CSV và chống trùng lặp
+        run: |
+          node -e "
+            const fs = require('fs');
+            const path = require('path');
+            const { parse } = require('csv-parse/sync');
+            const { stringify } = require('csv-stringify/sync');
+
+            const artifactsDir = './raw-results';
+            const allJobs = new Map(); // Dùng Map để chống trùng lặp dựa trên link
+
+            if (fs.existsSync(artifactsDir)) {
+              const workerDirs = fs.readdirSync(artifactsDir);
+              for (const dir of workerDirs) {
+                const files = fs.readdirSync(path.join(artifactsDir, dir));
+                for (const file of files) {
+                  if (file.endsWith('.csv')) {
+                    try {
+                      const content = fs.readFileSync(path.join(artifactsDir, dir, file), 'utf-8');
+                      const records = parse(content, { columns: true, skip_empty_lines: true });
+                      records.forEach(record => {
+                        if (record.link) { // Dùng link làm key duy nhất
+                          allJobs.set(record.link, record);
+                        }
+                      });
+                    } catch (e) {
+                      console.log(`Bỏ qua file lỗi: ${file}`);
+                    }
+                  }
+                }
+              }
+            }
+            
+            if (allJobs.size > 0) {
+              const finalData = Array.from(allJobs.values());
+              const date = new Date().toLocaleDateString('vi-VN', {year: 'numeric', month: '2-digit', day: '2-digit', timeZone: 'Asia/Ho_Chi_Minh'}).replace(/\//g, '-');
+              const finalFilename = \`data/topcv_ketoan_\${date}.csv\`;
+              const finalCsv = stringify(finalData, { header: true });
+              
+              fs.mkdirSync('data', { recursive: true });
+              fs.writeFileSync(finalFilename, '\ufeff' + finalCsv);
+              console.log(`Đã tổng hợp \${finalData.length} tin duy nhất vào \${finalFilename}`);
+              console.log(`::set-output name=final_filename::\${finalFilename}`);
+              console.log(`::set-output name=jobs_count::\${finalData.length}`);
+            } else {
+              console.log('Không có dữ liệu mới để tổng hợp.');
+              console.log('::set-output name=jobs_count::0');
+            }
+          "
+      
+      - name: 'Commit results to repository'
+        # Chỉ commit nếu có dữ liệu mới được thu thập
+        if: steps.combine.outputs.jobs_count > 0
+        run: |
+          git config --global user.name 'GitHub Actions Scraper'
+          git config --global user.email 'actions@github.com'
+          git add ${{ steps.combine.outputs.final_filename }}
+          git commit -m "📊 Dữ liệu TopCV: Thêm ${{ steps.combine.outputs.jobs_count }} tin tuyển dụng mới"
+          git push
