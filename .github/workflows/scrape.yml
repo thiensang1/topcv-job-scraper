@@ -1,15 +1,52 @@
-# --- QUY TRÌNH TỰ ĐỘNG HÓA - PHIÊN BẢN CHẨN ĐOÁN ---
-# Tên file: .github/workflows/scrape.yml
-# Mục đích: Thêm bước kiểm tra để xem các "bí mật" có được truyền đúng cách không.
-
+# --- QUY TRÌNH TỰ ĐỘNG HÓA CUỐI CÙNG - PHIÊN BẢN "TỔNG QUẢN" ---
 name: 'TopCV Daily Scraper'
 
 on:
+  # Chạy tự động vào 7 giờ sáng mỗi ngày (giờ Việt Nam)
   schedule:
-    - cron: '0 0 * * *'
+    - cron: '0 0 * * *' # Nửa đêm giờ UTC (7h sáng giờ VN)
+  # Cho phép chạy thủ công từ tab Actions trên GitHub
   workflow_dispatch:
 
 jobs:
+  # --- GIAI ĐOẠN 0: BỔ NHIỆM "TỔNG QUẢN" ---
+  get-proxy-quartermaster:
+    runs-on: ubuntu-latest
+    outputs:
+      proxy_host: ${{ steps.proxy_info.outputs.proxy_host }}
+      proxy_port: ${{ steps.proxy_info.outputs.proxy_port }}
+    steps:
+      - name: 'Checkout repository'
+        uses: actions/checkout@v4
+      - name: 'Set up Node.js'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+      # Tải về "sổ sách" từ lần chạy trước nếu có
+      - name: 'Download previous proxy state'
+        uses: actions/download-artifact@v4
+        with:
+            name: proxy-state-artifact
+            path: .
+        continue-on-error: true # Bỏ qua nếu đây là lần chạy đầu tiên
+      - name: 'Install dependencies for Quartermaster'
+        run: npm install axios
+      - name: 'Run Quartermaster to get a valid proxy'
+        id: proxy_info
+        env:
+          PROXY_API_ENDPOINT: ${{ secrets.PROXY_API_ENDPOINT }}
+          PROXY_API_KEY: ${{ secrets.PROXY_API_KEY }}
+        run: |
+          # Chạy script Tổng Quản và nó sẽ tự động set output
+          node get_proxy.js
+      - name: 'Persist proxy state'
+        # Lưu lại "sổ sách" để lần chạy sau có thể tái sử dụng
+        uses: actions/upload-artifact@v4
+        with:
+            name: proxy-state-artifact
+            path: proxy_state.json
+
+  # --- GIAI ĐOẠN 1: TRINH SÁT ---
   discover:
     runs-on: ubuntu-latest
     outputs:
@@ -27,8 +64,9 @@ jobs:
         id: get_pages
         run: echo "count=$(node discover_pages.js)" >> $GITHUB_OUTPUT
 
+  # --- GIAI ĐOẠN 2: KHAI THÁC SONG SONG ---
   collect:
-    needs: discover
+    needs: [discover, get-proxy-quartermaster]
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -46,19 +84,11 @@ jobs:
         run: npm install
       
       - name: 'Run collection worker'
-        env:
-          PROXY_API_ENDPOINT: ${{ secrets.PROXY_API_ENDPOINT }}
-          PROXY_API_KEY: ${{ secrets.PROXY_API_KEY }}
         run: |
-          # --- BƯỚC CHẨN ĐOÁN MỚI ---
-          echo "--- Chẩn đoán Bí mật ---"
-          echo "ENDPOINT: ${{ secrets.PROXY_API_ENDPOINT }}"
-          # In ra 'OK' nếu key tồn tại, 'NOT FOUND' nếu không, để đảm bảo an toàn
-          echo "KEY_STATUS: ${{ secrets.PROXY_API_KEY && 'OK' || 'NOT FOUND' }}" 
-          echo "--- Kết thúc Chẩn đoán ---"
-          
           PAGES_PER_WORKER=10
           TOTAL_PAGES=${{ needs.discover.outputs.totalPages }}
+          PROXY_HOST=${{ needs.get-proxy-quartermaster.outputs.proxy_host }}
+          PROXY_PORT=${{ needs.get-proxy-quartermaster.outputs.proxy_port }}
           WORKER_INDEX=${{ matrix.worker }}
           
           START_PAGE=$(( (WORKER_INDEX - 1) * PAGES_PER_WORKER + 1 ))
@@ -69,7 +99,7 @@ jobs:
           fi
           
           if (( START_PAGE <= TOTAL_PAGES )); then
-            node collector.js "ke-toan" $START_PAGE $END_PAGE $WORKER_INDEX
+            node collector.js "ke-toan" $START_PAGE $END_PAGE $WORKER_INDEX $PROXY_HOST $PROXY_PORT
           else
             echo "Worker ${{ matrix.worker }} không cần chạy."
           fi
@@ -81,6 +111,7 @@ jobs:
           path: results_worker_${{ matrix.worker }}.csv
           if-no-files-found: ignore
 
+  # --- GIAI ĐOẠN 3: TỔNG HỢP VÀ LƯU TRỮ ---
   combine-and-commit:
     needs: collect
     runs-on: ubuntu-latest
@@ -120,9 +151,7 @@ jobs:
                         const content = fs.readFileSync(path.join(artifactsDir, dir, file), 'utf-8');
                         const records = parse(content, { columns: true, skip_empty_lines: true });
                         records.forEach(record => {
-                          if (record.link) {
-                            allJobs.set(record.link, record);
-                          }
+                          if (record.link) { allJobs.set(record.link, record); }
                         });
                       } catch (e) { console.log(`Bỏ qua file lỗi: ${file}`); }
                     }
