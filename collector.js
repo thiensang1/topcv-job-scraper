@@ -1,5 +1,5 @@
-// --- CÔNG NHÂN KHAI THÁC - PHIÊN BẢN TINH GỌN ---
-// Nhiệm vụ: Nhận "nhu yếu phẩm" (proxy) từ "Tổng Quản" và thực hiện nhiệm vụ thu thập.
+// --- CÔNG NHÂN KHAI THÁC - PHIÊN BẢN "TIN TƯỞNG" ---
+// Nhiệm vụ: Tin tưởng vào cơ chế tìm kiếm trình duyệt mặc định của Puppeteer.
 
 const puppeteer = require('puppeteer-extra');
 const StealthPlugin = require('puppeteer-extra-plugin-stealth');
@@ -36,6 +36,7 @@ async function scrapeTopCV(keyword, startPage, endPage, workerId, proxy) {
     ];
 
     try {
+        // Tin tưởng Puppeteer tự tìm trình duyệt đã được cài đặt bởi browser-actions
         browser = await puppeteer.launch({
             headless: true,
             args: browserArgs,
@@ -57,7 +58,6 @@ async function scrapeTopCV(keyword, startPage, endPage, workerId, proxy) {
                 const jobListSelector = 'div.job-list-search-result';
                 await page.waitForSelector(jobListSelector, { timeout: 30000 });
                 
-                // Giai đoạn "quan sát kiên nhẫn"
                 let previousHtml = '', currentHtml = '', stabilityCounter = 0;
                 for (let check = 0; check < 10; check++) {
                     currentHtml = await page.$eval(jobListSelector, element => element.innerHTML);

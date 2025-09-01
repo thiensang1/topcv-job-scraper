@@ -1,5 +1,5 @@
-# --- QUY TRÌNH TỰ ĐỘNG HÓA CUỐI CÙNG - PHIÊN BẢN "CHUYÊN NGHIỆP" ---
-# Cập nhật: Sử dụng Action chuyên dụng browser-actions/setup-chrome để cài đặt trình duyệt.
+# --- QUY TRÌNH TỰ ĐỘNG HÓA CUỐI CÙNG - PHIÊN BẢN "TIN TƯỞNG" ---
+# Cập nhật: Tin tưởng vào browser-actions và cơ chế tự tìm kiếm của Puppeteer.
 
 name: 'TopCV Daily Scraper'
 
@@ -55,7 +55,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '18'
-      # --- SỬA LỖI: Thuê "Thợ sửa xe Chuyên nghiệp" ---
+      # Thuê "Thợ sửa xe Chuyên nghiệp" để cài đặt trình duyệt
       - name: 'Setup Chrome browser'
         uses: browser-actions/setup-chrome@latest
       - name: 'Install dependencies for scout'
@@ -83,7 +83,7 @@ jobs:
         with:
           node-version: '18'
           cache: 'npm'
-      # --- SỬA LỖI: Thuê "Thợ sửa xe Chuyên nghiệp" ---
+      # Thuê "Thợ sửa xe Chuyên nghiệp" để cài đặt trình duyệt
       - name: 'Setup Chrome browser'
         uses: browser-actions/setup-chrome@latest
       - name: 'Install all project dependencies'
