@@ -1,5 +1,5 @@
-# --- QUY TRÌNH TỰ ĐỘNG HÓA CUỐI CÙNG - PHIÊN BẢN CÀI ĐẶT TRÌNH DUYỆT ---
-# Cập nhật: Thêm bước cài đặt trình duyệt Chrome một cách tường minh cho Puppeteer.
+# --- QUY TRÌNH TỰ ĐỘNG HÓA CUỐI CÙNG - PHIÊN BẢN "SÁCH HƯỚNG DẪN" ---
+# Cập nhật: Tin tưởng vào .puppeteerrc.js để tự động cài đặt trình duyệt.
 
 name: 'TopCV Daily Scraper'
 
@@ -56,10 +56,8 @@ jobs:
         with:
           node-version: '18'
       - name: 'Install dependencies for scout'
+        # npm install sẽ tự động đọc .puppeteerrc.js và tải trình duyệt
         run: npm install puppeteer puppeteer-extra puppeteer-extra-plugin-stealth cheerio
-      # --- SỬA LỖI: Cài đặt "Chiếc xe" (Trình duyệt Chrome) một cách tường minh ---
-      - name: 'Install Chrome browser for Puppeteer'
-        run: npx puppeteer browsers install chrome
       - name: 'Run scout script to get total pages'
         id: get_pages
         env:
@@ -84,10 +82,8 @@ jobs:
           node-version: '18'
           cache: 'npm'
       - name: 'Install all project dependencies'
+        # npm install sẽ tự động đọc .puppeteerrc.js và tải trình duyệt
         run: npm install
-      # --- SỬA LỖI: Cài đặt "Chiếc xe" (Trình duyệt Chrome) một cách tường minh ---
-      - name: 'Install Chrome browser for Puppeteer'
-        run: npx puppeteer browsers install chrome
       
       - name: 'Run collection worker'
         run: |
