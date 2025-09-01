@@ -1,5 +1,5 @@
-// --- TRINH SÁT VIÊN - PHIÊN BẢN "TIN TƯỞNG" ---
-// Nhiệm vụ: Tin tưởng vào cơ chế tìm kiếm trình duyệt mặc định của Puppeteer.
+// --- TRINH SÁT VIÊN - PHIÊN BẢN "BẢN ĐỒ" ---
+// Nhiệm vụ: Sử dụng Proxy và "Bản đồ Dẫn đường" (executablePath) để do thám địa hình.
 
 const puppeteer = require('puppeteer-extra');
 const StealthPlugin = require('puppeteer-extra-plugin-stealth');
@@ -8,17 +8,24 @@ const cheerio = require('cheerio');
 puppeteer.use(StealthPlugin());
 
 // --- CẤU HÌNH ---
-const TARGET_KEYWORD = "ke-toan";
+const TARGET_KEYWORD = "ke-toan"; 
 const BROWSER_TIMEOUT = 60000;
 const PAGE_LOAD_TIMEOUT = 45000;
 
 async function discoverTotalPages() {
     let browser;
+    // Đọc thông tin proxy và "bản đồ" từ "bộ não" điều phối
     const PROXY_HOST = process.env.PROXY_HOST;
     const PROXY_PORT = process.env.PROXY_PORT;
+    const CHROME_EXECUTABLE_PATH = process.env.CHROME_PATH; // Nhận "tọa độ" của "chiếc xe"
 
     if (!PROXY_HOST || !PROXY_PORT) {
         console.error("Lỗi nghiêm trọng: Trinh sát viên không được trang bị proxy. Dừng lại.");
+        return 1;
+    }
+    
+    if (!CHROME_EXECUTABLE_PATH) {
+        console.error("Lỗi nghiêm trọng: Trinh sát viên không nhận được 'Bản đồ Dẫn đường' (CHROME_PATH). Dừng lại.");
         return 1;
     }
 
@@ -30,10 +37,11 @@ async function discoverTotalPages() {
 
     try {
         console.log(`[Trinh sát] Đang khởi tạo trình duyệt với danh tính ${PROXY_HOST}...`);
+        console.log(`[Trinh sát] Sử dụng "chiếc xe" tại: ${CHROME_EXECUTABLE_PATH}`);
         
-        // Tin tưởng Puppeteer tự tìm trình duyệt đã được cài đặt bởi browser-actions
         browser = await puppeteer.launch({
             headless: true,
+            executablePath: CHROME_EXECUTABLE_PATH, // Sử dụng "Bản đồ" để khởi động đúng "chiếc xe"
             args: browserArgs,
             ignoreHTTPSErrors: true,
             timeout: BROWSER_TIMEOUT

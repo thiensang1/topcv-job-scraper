@@ -1,5 +1,5 @@
-# --- QUY TRÌNH TỰ ĐỘNG HÓA CUỐI CÙNG - PHIÊN BẢN "TIN TƯỞNG" ---
-# Cập nhật: Tin tưởng vào browser-actions và cơ chế tự tìm kiếm của Puppeteer.
+# --- QUY TRÌNH TỰ ĐỘNG HÓA CUỐI CÙNG - PHIÊN BẢN "BẢN ĐỒ" ---
+# Cập nhật: Lấy tọa độ trình duyệt và cung cấp cho các script.
 
 name: 'TopCV Daily Scraper'
 
@@ -48,6 +48,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       totalPages: ${{ steps.get_pages.outputs.count }}
+      chrome_path: ${{ steps.setup_chrome.outputs.chrome-path }} # Xuất ra "tọa độ"
     steps:
       - name: 'Checkout repository'
         uses: actions/checkout@v4
@@ -55,8 +56,9 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '18'
-      # Thuê "Thợ sửa xe Chuyên nghiệp" để cài đặt trình duyệt
+      # --- SỬA LỖI: Thuê "Thợ sửa xe" và Gắn "Thiết bị Định vị" ---
       - name: 'Setup Chrome browser'
+        id: setup_chrome # Đặt ID để lấy output
         uses: browser-actions/setup-chrome@latest
       - name: 'Install dependencies for scout'
         run: npm install puppeteer puppeteer-extra puppeteer-extra-plugin-stealth cheerio
@@ -65,6 +67,7 @@ jobs:
         env:
           PROXY_HOST: ${{ needs.get-proxy-quartermaster.outputs.proxy_host }}
           PROXY_PORT: ${{ needs.get-proxy-quartermaster.outputs.proxy_port }}
+          CHROME_PATH: ${{ steps.setup_chrome.outputs.chrome-path }} # Cung cấp "Bản đồ" cho Trinh sát viên
         run: echo "count=$(node discover_pages.js)" >> $GITHUB_OUTPUT
 
   # --- GIAI ĐOẠN 3: KHAI THÁC SONG SONG ---
@@ -83,8 +86,9 @@ jobs:
         with:
           node-version: '18'
           cache: 'npm'
-      # Thuê "Thợ sửa xe Chuyên nghiệp" để cài đặt trình duyệt
+      # --- SỬA LỖI: Thuê "Thợ sửa xe" cho mỗi công nhân ---
       - name: 'Setup Chrome browser'
+        id: setup_chrome
         uses: browser-actions/setup-chrome@latest
       - name: 'Install all project dependencies'
         run: npm install
@@ -96,6 +100,7 @@ jobs:
           PROXY_HOST=${{ needs.get-proxy-quartermaster.outputs.proxy_host }}
           PROXY_PORT=${{ needs.get-proxy-quartermaster.outputs.proxy_port }}
           WORKER_INDEX=${{ matrix.worker }}
+          CHROME_PATH="${{ steps.setup_chrome.outputs.chrome-path }}" # Nhận "Bản đồ" từ bước setup_chrome của job này
           
           START_PAGE=$(( (WORKER_INDEX - 1) * PAGES_PER_WORKER + 1 ))
           END_PAGE=$(( WORKER_INDEX * PAGES_PER_WORKER ))
@@ -105,7 +110,8 @@ jobs:
           fi
           
           if (( START_PAGE <= TOTAL_PAGES )); then
-            node collector.js "ke-toan" $START_PAGE $END_PAGE $WORKER_INDEX $PROXY_HOST $PROXY_PORT
+            # Cung cấp "Bản đồ" cho Công nhân
+            node collector.js "ke-toan" $START_PAGE $END_PAGE $WORKER_INDEX $PROXY_HOST $PROXY_PORT "$CHROME_PATH"
           else
             echo "Worker ${{ matrix.worker }} không cần chạy."
           fi
