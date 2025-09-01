@@ -1,5 +1,5 @@
-# --- QUY TRÌNH TỰ ĐỘNG HÓA CUỐI CÙNG - PHIÊN BẢN "BẢN ĐỒ" ---
-# Cập nhật: Lấy tọa độ trình duyệt và cung cấp cho các script.
+# --- QUY TRÌNH TỰ ĐỘNG HÓA CUỐI CÙNG - PHIÊN BẢN "BÁO CÁO SẠCH" ---
+# Tương thích hoàn toàn với các script đã được nâng cấp để phân luồng báo cáo.
 
 name: 'TopCV Daily Scraper'
 
@@ -56,9 +56,8 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '18'
-      # --- SỬA LỖI: Thuê "Thợ sửa xe" và Gắn "Thiết bị Định vị" ---
       - name: 'Setup Chrome browser'
-        id: setup_chrome # Đặt ID để lấy output
+        id: setup_chrome 
         uses: browser-actions/setup-chrome@latest
       - name: 'Install dependencies for scout'
         run: npm install puppeteer puppeteer-extra puppeteer-extra-plugin-stealth cheerio
@@ -67,7 +66,7 @@ jobs:
         env:
           PROXY_HOST: ${{ needs.get-proxy-quartermaster.outputs.proxy_host }}
           PROXY_PORT: ${{ needs.get-proxy-quartermaster.outputs.proxy_port }}
-          CHROME_PATH: ${{ steps.setup_chrome.outputs.chrome-path }} # Cung cấp "Bản đồ" cho Trinh sát viên
+          CHROME_PATH: ${{ steps.setup_chrome.outputs.chrome-path }} 
         run: echo "count=$(node discover_pages.js)" >> $GITHUB_OUTPUT
 
   # --- GIAI ĐOẠN 3: KHAI THÁC SONG SONG ---
@@ -86,7 +85,6 @@ jobs:
         with:
           node-version: '18'
           cache: 'npm'
-      # --- SỬA LỖI: Thuê "Thợ sửa xe" cho mỗi công nhân ---
       - name: 'Setup Chrome browser'
         id: setup_chrome
         uses: browser-actions/setup-chrome@latest
@@ -100,7 +98,7 @@ jobs:
           PROXY_HOST=${{ needs.get-proxy-quartermaster.outputs.proxy_host }}
           PROXY_PORT=${{ needs.get-proxy-quartermaster.outputs.proxy_port }}
           WORKER_INDEX=${{ matrix.worker }}
-          CHROME_PATH="${{ steps.setup_chrome.outputs.chrome-path }}" # Nhận "Bản đồ" từ bước setup_chrome của job này
+          CHROME_PATH="${{ needs.discover.outputs.chrome_path }}" # Nhận "Bản đồ" từ job discover
           
           START_PAGE=$(( (WORKER_INDEX - 1) * PAGES_PER_WORKER + 1 ))
           END_PAGE=$(( WORKER_INDEX * PAGES_PER_WORKER ))
@@ -110,7 +108,6 @@ jobs:
           fi
           
           if (( START_PAGE <= TOTAL_PAGES )); then
-            # Cung cấp "Bản đồ" cho Công nhân
             node collector.js "ke-toan" $START_PAGE $END_PAGE $WORKER_INDEX $PROXY_HOST $PROXY_PORT "$CHROME_PATH"
           else
             echo "Worker ${{ matrix.worker }} không cần chạy."

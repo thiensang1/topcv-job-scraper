@@ -1,5 +1,5 @@
-// --- CÔNG NHÂN KHAI THÁC - PHIÊN BẢN "BẢN ĐỒ" ---
-// Nhiệm vụ: Nhận "nhu yếu phẩm" (proxy) và "Bản đồ Dẫn đường" (executablePath) để thực hiện nhiệm vụ.
+// --- CÔNG NHÂN KHAI THÁC - PHIÊN BẢN "BÁO CÁO SẠCH" ---
+// Cập nhật: Chuyển toàn bộ nhật ký sang stderr để không làm nhiễu output.
 
 const puppeteer = require('puppeteer-extra');
 const StealthPlugin = require('puppeteer-extra-plugin-stealth');
@@ -20,7 +20,8 @@ const randomDelay = (min, max) => Math.random() * (max - min) + min;
 
 // --- HÀM THU THẬP DỮ LIỆU CHÍNH ---
 async function scrapeTopCV(keyword, startPage, endPage, workerId, proxy, chromePath) {
-    console.log(`--- [Worker ${workerId}] Bắt đầu nhiệm vụ: Thu thập '${keyword}' từ trang ${startPage} đến ${endPage} ---`);
+    // Luồng phụ: Ghi nhật ký vào stderr
+    console.error(`--- [Worker ${workerId}] Bắt đầu nhiệm vụ: Thu thập '${keyword}' từ trang ${startPage} đến ${endPage} ---`);
     
     let browser, page;
     
@@ -40,10 +41,10 @@ async function scrapeTopCV(keyword, startPage, endPage, workerId, proxy, chromeP
     ];
 
     try {
-        console.log(`   -> [Worker ${workerId}] Sử dụng "chiếc xe" tại: ${chromePath}`);
+        console.error(`   -> [Worker ${workerId}] Sử dụng "chiếc xe" tại: ${chromePath}`);
         browser = await puppeteer.launch({
             headless: true,
-            executablePath: chromePath, // Sử dụng "Bản đồ"
+            executablePath: chromePath,
             args: browserArgs,
             ignoreHTTPSErrors: true,
             timeout: BROWSER_TIMEOUT
@@ -55,7 +56,7 @@ async function scrapeTopCV(keyword, startPage, endPage, workerId, proxy, chromeP
 
         for (let i = startPage; i <= endPage; i++) {
             const targetUrl = `https://www.topcv.vn/tim-viec-lam-${keyword}-cr392cb393?type_keyword=1&page=${i}&category_family=r392~b393`;
-            console.log(`   -> [Worker ${workerId}] Đang truy cập trang ${i} với danh tính ${proxy.host}...`);
+            console.error(`   -> [Worker ${workerId}] Đang truy cập trang ${i} với danh tính ${proxy.host}...`);
 
             try {
                 await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: PAGE_LOAD_TIMEOUT });
@@ -82,7 +83,7 @@ async function scrapeTopCV(keyword, startPage, endPage, workerId, proxy, chromeP
                 const jobListings = $('div[class*="job-item"]');
 
                 if (jobListings.length === 0) {
-                    console.log(`   -> [Worker ${workerId}] Không tìm thấy tin tuyển dụng nào trên trang ${i}, kết thúc sớm.`);
+                    console.error(`   -> [Worker ${workerId}] Không tìm thấy tin tuyển dụng nào trên trang ${i}, kết thúc sớm.`);
                     break;
                 }
                  
@@ -113,11 +114,11 @@ async function scrapeTopCV(keyword, startPage, endPage, workerId, proxy, chromeP
                     });
                 });
 
-                console.log(`   -> [Worker ${workerId}] Đã thu thập ${jobListings.length} tin từ trang ${i}.`);
+                console.error(`   -> [Worker ${workerId}] Đã thu thập ${jobListings.length} tin từ trang ${i}.`);
 
                 const lastPaginationItem = $('ul.pagination li:last-child');
                 if (lastPaginationItem.hasClass('disabled')) {
-                    console.log(`   -> [Worker ${workerId}] Đã đến trang cuối cùng. Dừng lại.`);
+                    console.error(`   -> [Worker ${workerId}] Đã đến trang cuối cùng. Dừng lại.`);
                     break;
                 }
                 
@@ -140,10 +141,8 @@ async function scrapeTopCV(keyword, startPage, endPage, workerId, proxy, chromeP
     }
 }
 
-// --- HÀM MAIN ĐỂ CHẠY TỪ DÒNG LỆNH ---
 (async () => {
     const args = process.argv.slice(2);
-    // Cập nhật để nhận thêm tham số chromePath
     if (args.length !== 7) {
         console.error("Cách dùng: node collector.js [keyword] [startPage] [endPage] [workerId] [proxyHost] [proxyPort] [chromePath]");
         process.exit(1);
@@ -159,9 +158,9 @@ async function scrapeTopCV(keyword, startPage, endPage, workerId, proxy, chromeP
         const outputFilename = `results_worker_${workerId}.csv`;
         const csvData = stringify(results, { header: true });
         fs.writeFileSync(outputFilename, '\ufeff' + csvData);
-        console.log(`[Worker ${workerId}] Đã lưu ${results.length} tin vào ${outputFilename}`);
+        console.error(`[Worker ${workerId}] Đã lưu ${results.length} tin vào ${outputFilename}`);
     } else {
-        console.log(`[Worker ${workerId}] Không thu thập được dữ liệu nào.`);
+        console.error(`[Worker ${workerId}] Không thu thập được dữ liệu nào.`);
     }
 })();
 
