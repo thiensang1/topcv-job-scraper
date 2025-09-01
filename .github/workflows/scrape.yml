@@ -1,21 +1,17 @@
-# --- QUY TRÌNH TỰ ĐỘNG HÓA CUỐI CÙNG - PHIÊN BẢN NÂNG CẤP V4 ---
+# --- QUY TRÌNH TỰ ĐỘNG HÓA CUỐI CÙNG - PHIÊN BẢN HOÀN THIỆN ---
 # Tên file: .github/workflows/scrape.yml
 
 name: 'TopCV Daily Scraper'
 
 on:
-  # Chạy tự động vào 7 giờ sáng mỗi ngày (giờ Việt Nam)
   schedule:
-    - cron: '0 0 * * *' # Nửa đêm giờ UTC (7h sáng giờ VN)
-  # Cho phép chạy thủ công từ tab Actions trên GitHub
+    - cron: '0 0 * * *'
   workflow_dispatch:
 
 jobs:
-  # --- GIAI ĐOẠN 1: TRINH SÁT ---
   discover:
     runs-on: ubuntu-latest
     outputs:
-      # Xuất ra tổng số trang để các job sau có thể sử dụng
       totalPages: ${{ steps.get_pages.outputs.count }}
     steps:
       - name: 'Checkout repository'
@@ -28,19 +24,14 @@ jobs:
         run: npm install puppeteer-extra puppeteer-extra-plugin-stealth
       - name: 'Run scout script to get total pages'
         id: get_pages
-        # Chạy script trinh sát và lưu kết quả vào output
         run: echo "count=$(node discover_pages.js)" >> $GITHUB_OUTPUT
 
-  # --- GIAI ĐOẠN 2: KHAI THÁC SONG SONG ---
   collect:
-    # Cần job 'discover' hoàn thành trước
     needs: discover
     runs-on: ubuntu-latest
     strategy:
-      # Chạy song song, nếu một worker lỗi, các worker khác vẫn tiếp tục
       fail-fast: false
       matrix:
-        # Triển khai 15 "công nhân", bạn có thể tăng/giảm nếu cần
         worker: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15] 
     steps:
       - name: 'Checkout repository'
@@ -54,7 +45,9 @@ jobs:
         run: npm install
       
       - name: 'Run collection worker'
+        # --- SỬA LỖI QUAN TRỌNG: Bổ sung PROXY_API_ENDPOINT ---
         env:
+          PROXY_API_ENDPOINT: ${{ secrets.PROXY_API_ENDPOINT }}
           PROXY_API_KEY: ${{ secrets.PROXY_API_KEY }}
         run: |
           PAGES_PER_WORKER=10
@@ -75,14 +68,12 @@ jobs:
           fi
       
       - name: 'Upload worker artifact'
-        # NÂNG CẤP LÊN V4
         uses: actions/upload-artifact@v4
         with:
           name: raw-results-${{ matrix.worker }}
           path: results_worker_${{ matrix.worker }}.csv
           if-no-files-found: ignore
 
-  # --- GIAI ĐOẠN 3: TỔNG HỢP VÀ LƯU TRỮ ---
   combine-and-commit:
     needs: collect
     runs-on: ubuntu-latest
@@ -94,7 +85,6 @@ jobs:
         with:
           node-version: '18'
       - name: 'Download all worker artifacts'
-        # NÂNG CẤP LÊN V4
         uses: actions/download-artifact@v4
         with:
           path: ./raw-results
@@ -127,14 +117,10 @@ jobs:
                             allJobs.set(record.link, record);
                           }
                         });
-                      } catch (e) {
-                        console.log(`Bỏ qua file lỗi: ${file}`);
-                      }
+                      } catch (e) { console.log(`Bỏ qua file lỗi: ${file}`); }
                     }
                   }
-                } catch(e) {
-                   console.log(`Bỏ qua thư mục lỗi: ${dir}`);
-                }
+                } catch(e) { console.log(`Bỏ qua thư mục lỗi: ${dir}`); }
               }
             }
             
@@ -147,7 +133,6 @@ jobs:
               fs.writeFileSync(finalFilename, '\ufeff' + stringify(finalData, { header: true }));
               console.log(`Đã tổng hợp \${finalData.length} tin duy nhất vào \${finalFilename}`);
               
-              // Sử dụng cú pháp mới để set output
               fs.appendFileSync(process.env.GITHUB_OUTPUT, `final_filename=${finalFilename}\n`);
               fs.appendFileSync(process.env.GITHUB_OUTPUT, `jobs_count=${finalData.length}\n`);
             } else {
