@@ -1,4 +1,6 @@
-# --- QUY TRÌNH TỰ ĐỘNG HÓA CUỐI CÙNG - PHIÊN BẢN "TRINH SÁT NẰM VÙNG" ---
+# --- QUY TRÌNH TỰ ĐỘNG HÓA CUỐI CÙNG - PHIÊN BẢN "TƯƠNG THÍCH" ---
+# Cập nhật: Sửa lỗi system dependencies cho môi trường runner mới.
+
 name: 'TopCV Daily Scraper'
 
 on:
@@ -42,7 +44,6 @@ jobs:
 
   # --- GIAI ĐOẠN 2: "TRINH SÁT NẰM VÙNG" ---
   discover:
-    # Cần "Tổng Quản" hoàn thành trước để có "trang bị"
     needs: get-proxy-quartermaster
     runs-on: ubuntu-latest
     outputs:
@@ -54,13 +55,13 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '18'
+      # --- SỬA LỖI: Cập nhật danh sách system dependencies ---
       - name: 'Install system dependencies for Puppeteer'
-        run: sudo apt-get update && sudo apt-get install -yq libgbm-dev libnss3 libatk-bridge2.0-0 libgtk-3-0 libasound2
+        run: sudo apt-get update && sudo apt-get install -yq libgbm-dev libnss3 libatk-bridge2.0-0 libgtk-3-0 libasound2t64
       - name: 'Install dependencies for scout'
         run: npm install puppeteer puppeteer-extra puppeteer-extra-plugin-stealth cheerio
       - name: 'Run scout script to get total pages'
         id: get_pages
-        # "Trang bị" proxy cho "Trinh sát viên"
         env:
           PROXY_HOST: ${{ needs.get-proxy-quartermaster.outputs.proxy_host }}
           PROXY_PORT: ${{ needs.get-proxy-quartermaster.outputs.proxy_port }}
@@ -82,8 +83,9 @@ jobs:
         with:
           node-version: '18'
           cache: 'npm'
+      # --- SỬA LỖI: Cập nhật danh sách system dependencies ---
       - name: 'Install system dependencies for Puppeteer'
-        run: sudo apt-get update && sudo apt-get install -yq libgbm-dev libnss3 libatk-bridge2.0-0 libgtk-3-0 libasound2
+        run: sudo apt-get update && sudo apt-get install -yq libgbm-dev libnss3 libatk-bridge2.0-0 libgtk-3-0 libasound2t64
       - name: 'Install all project dependencies'
         run: npm install
       
