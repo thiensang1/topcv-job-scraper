@@ -1,12 +1,13 @@
-# --- QUY TRÌNH TỰ ĐỘNG HÓA CUỐI CÙNG - PHIÊN BẢN SỬA LỖI ---
+# --- QUY TRÌNH TỰ ĐỘNG HÓA CUỐI CÙNG - PHIÊN BẢN "TRINH SÁT NẰM VÙNG" ---
 name: 'TopCV Daily Scraper'
 
 on:
   schedule:
-    - cron: '0 0 * * *'
+    - cron: '0 0 * * *' # Nửa đêm giờ UTC (7h sáng giờ VN)
   workflow_dispatch:
 
 jobs:
+  # --- GIAI ĐOẠN 1: BỔ NHIỆM "TỔNG QUẢN" ---
   get-proxy-quartermaster:
     runs-on: ubuntu-latest
     outputs:
@@ -39,7 +40,10 @@ jobs:
             name: proxy-state-artifact
             path: proxy_state.json
 
+  # --- GIAI ĐOẠN 2: "TRINH SÁT NẰM VÙNG" ---
   discover:
+    # Cần "Tổng Quản" hoàn thành trước để có "trang bị"
+    needs: get-proxy-quartermaster
     runs-on: ubuntu-latest
     outputs:
       totalPages: ${{ steps.get_pages.outputs.count }}
@@ -50,12 +54,19 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '18'
+      - name: 'Install system dependencies for Puppeteer'
+        run: sudo apt-get update && sudo apt-get install -yq libgbm-dev libnss3 libatk-bridge2.0-0 libgtk-3-0 libasound2
       - name: 'Install dependencies for scout'
-        run: npm install puppeteer-extra puppeteer-extra-plugin-stealth
+        run: npm install puppeteer puppeteer-extra puppeteer-extra-plugin-stealth cheerio
       - name: 'Run scout script to get total pages'
         id: get_pages
+        # "Trang bị" proxy cho "Trinh sát viên"
+        env:
+          PROXY_HOST: ${{ needs.get-proxy-quartermaster.outputs.proxy_host }}
+          PROXY_PORT: ${{ needs.get-proxy-quartermaster.outputs.proxy_port }}
         run: echo "count=$(node discover_pages.js)" >> $GITHUB_OUTPUT
 
+  # --- GIAI ĐOẠN 3: KHAI THÁC SONG SONG ---
   collect:
     needs: [discover, get-proxy-quartermaster]
     runs-on: ubuntu-latest
@@ -71,8 +82,11 @@ jobs:
         with:
           node-version: '18'
           cache: 'npm'
+      - name: 'Install system dependencies for Puppeteer'
+        run: sudo apt-get update && sudo apt-get install -yq libgbm-dev libnss3 libatk-bridge2.0-0 libgtk-3-0 libasound2
       - name: 'Install all project dependencies'
         run: npm install
+      
       - name: 'Run collection worker'
         run: |
           PAGES_PER_WORKER=10
@@ -93,6 +107,7 @@ jobs:
           else
             echo "Worker ${{ matrix.worker }} không cần chạy."
           fi
+      
       - name: 'Upload worker artifact'
         uses: actions/upload-artifact@v4
         with:
@@ -100,6 +115,7 @@ jobs:
           path: results_worker_${{ matrix.worker }}.csv
           if-no-files-found: ignore
 
+  # --- GIAI ĐOẠN 4: TỔNG HỢP VÀ LƯU TRỮ ---
   combine-and-commit:
     needs: collect
     runs-on: ubuntu-latest
@@ -114,13 +130,10 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: ./raw-results
-      - name: 'Install dependencies for combination script'
-        # Cài đặt các thư viện cần thiết cho "Chuyên gia"
-        run: npm install csv-parse csv-stringify
-      - name: 'Combine results and check for duplicates'
+      - name: 'Run combination script'
         id: combine
-        # --- SỬA LỖI QUAN TRỌNG: Thay thế toàn bộ logic phức tạp bằng một lệnh gọi duy nhất ---
         run: node combine_results.js
+      
       - name: 'Commit results to repository'
         if: steps.combine.outputs.jobs_count > 0
         run: |
