@@ -1,5 +1,5 @@
-# --- QUY TRÌNH TỰ ĐỘNG HÓA CUỐI CÙNG - PHIÊN BẢN "TƯƠNG THÍCH" ---
-# Cập nhật: Sửa lỗi system dependencies cho môi trường runner mới.
+# --- QUY TRÌNH TỰ ĐỘNG HÓA CUỐI CÙNG - PHIÊN BẢN CÀI ĐẶT TRÌNH DUYỆT ---
+# Cập nhật: Thêm bước cài đặt trình duyệt Chrome một cách tường minh cho Puppeteer.
 
 name: 'TopCV Daily Scraper'
 
@@ -55,11 +55,11 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '18'
-      # --- SỬA LỖI: Cập nhật danh sách system dependencies ---
-      - name: 'Install system dependencies for Puppeteer'
-        run: sudo apt-get update && sudo apt-get install -yq libgbm-dev libnss3 libatk-bridge2.0-0 libgtk-3-0 libasound2t64
       - name: 'Install dependencies for scout'
         run: npm install puppeteer puppeteer-extra puppeteer-extra-plugin-stealth cheerio
+      # --- SỬA LỖI: Cài đặt "Chiếc xe" (Trình duyệt Chrome) một cách tường minh ---
+      - name: 'Install Chrome browser for Puppeteer'
+        run: npx puppeteer browsers install chrome
       - name: 'Run scout script to get total pages'
         id: get_pages
         env:
@@ -83,11 +83,11 @@ jobs:
         with:
           node-version: '18'
           cache: 'npm'
-      # --- SỬA LỖI: Cập nhật danh sách system dependencies ---
-      - name: 'Install system dependencies for Puppeteer'
-        run: sudo apt-get update && sudo apt-get install -yq libgbm-dev libnss3 libatk-bridge2.0-0 libgtk-3-0 libasound2t64
       - name: 'Install all project dependencies'
         run: npm install
+      # --- SỬA LỖI: Cài đặt "Chiếc xe" (Trình duyệt Chrome) một cách tường minh ---
+      - name: 'Install Chrome browser for Puppeteer'
+        run: npx puppeteer browsers install chrome
       
       - name: 'Run collection worker'
         run: |
