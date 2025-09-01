@@ -1,4 +1,4 @@
-# --- QUY TRÌNH TỰ ĐỘNG HÓA CUỐI CÙNG - PHIÊN BẢN API PROXY ĐỘNG ---
+# --- QUY TRÌNH TỰ ĐỘNG HÓA CUỐI CÙNG - PHIÊN BẢN NÂNG CẤP V4 ---
 # Tên file: .github/workflows/scrape.yml
 
 name: 'TopCV Daily Scraper'
@@ -19,9 +19,9 @@ jobs:
       totalPages: ${{ steps.get_pages.outputs.count }}
     steps:
       - name: 'Checkout repository'
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: 'Set up Node.js'
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
           node-version: '18'
       - name: 'Install dependencies for scout'
@@ -41,26 +41,22 @@ jobs:
       fail-fast: false
       matrix:
         # Triển khai 15 "công nhân", bạn có thể tăng/giảm nếu cần
-        # Ví dụ: 15 công nhân, mỗi người 10 trang -> 150 trang tối đa
         worker: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15] 
     steps:
       - name: 'Checkout repository'
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: 'Set up Node.js'
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
           node-version: '18'
           cache: 'npm'
-      # Cài đặt toàn bộ thư viện đã được định nghĩa trong package.json
       - name: 'Install all project dependencies'
         run: npm install
       
       - name: 'Run collection worker'
-        # Cung cấp "chỉ thị" (thông tin proxy bí mật) cho công nhân
         env:
           PROXY_API_KEY: ${{ secrets.PROXY_API_KEY }}
         run: |
-          # Tính toán khoảng trang cho mỗi worker
           PAGES_PER_WORKER=10
           TOTAL_PAGES=${{ needs.discover.outputs.totalPages }}
           WORKER_INDEX=${{ matrix.worker }}
@@ -68,12 +64,10 @@ jobs:
           START_PAGE=$(( (WORKER_INDEX - 1) * PAGES_PER_WORKER + 1 ))
           END_PAGE=$(( WORKER_INDEX * PAGES_PER_WORKER ))
           
-          # Đảm bảo worker cuối cùng không chạy quá tổng số trang
           if (( END_PAGE > TOTAL_PAGES )); then
             END_PAGE=$TOTAL_PAGES
           fi
           
-          # Chỉ chạy nếu trang bắt đầu là hợp lệ
           if (( START_PAGE <= TOTAL_PAGES )); then
             node collector.js "ke-toan" $START_PAGE $END_PAGE $WORKER_INDEX
           else
@@ -81,8 +75,8 @@ jobs:
           fi
       
       - name: 'Upload worker artifact'
-        # Tải lên kết quả của worker để job cuối cùng có thể gom lại
-        uses: actions/upload-artifact@v3
+        # NÂNG CẤP LÊN V4
+        uses: actions/upload-artifact@v4
         with:
           name: raw-results-${{ matrix.worker }}
           path: results_worker_${{ matrix.worker }}.csv
@@ -94,21 +88,20 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: 'Checkout repository'
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: 'Set up Node.js'
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
           node-version: '18'
       - name: 'Download all worker artifacts'
-        uses: actions/download-artifact@v3
+        # NÂNG CẤP LÊN V4
+        uses: actions/download-artifact@v4
         with:
           path: ./raw-results
       - name: 'Install dependencies for combination script'
-        # Cài đặt thư viện cần thiết cho việc gom file
         run: npm install csv-parse csv-stringify
       - name: 'Combine results and check for duplicates'
         id: combine
-        # Chạy một script nhỏ để gom các file CSV và chống trùng lặp
         run: |
           node -e "
             const fs = require('fs');
@@ -117,7 +110,7 @@ jobs:
             const { stringify } = require('csv-stringify/sync');
 
             const artifactsDir = './raw-results';
-            const allJobs = new Map(); // Dùng Map để chống trùng lặp dựa trên link
+            const allJobs = new Map();
 
             if (fs.existsSync(artifactsDir)) {
               const workerDirs = fs.readdirSync(artifactsDir);
@@ -130,40 +123,39 @@ jobs:
                         const content = fs.readFileSync(path.join(artifactsDir, dir, file), 'utf-8');
                         const records = parse(content, { columns: true, skip_empty_lines: true });
                         records.forEach(record => {
-                          if (record.link) { // Dùng link làm key duy nhất
+                          if (record.link) {
                             allJobs.set(record.link, record);
                           }
                         });
                       } catch (e) {
-                        console.log(`Bỏ qua file lỗi: \${file}`);
+                        console.log(`Bỏ qua file lỗi: ${file}`);
                       }
                     }
                   }
                 } catch(e) {
-                   console.log(`Bỏ qua thư mục lỗi: \${dir}`);
+                   console.log(`Bỏ qua thư mục lỗi: ${dir}`);
                 }
               }
             }
             
             if (allJobs.size > 0) {
               const finalData = Array.from(allJobs.values());
-              // Tạo tên file theo ngày tháng năm hiện tại (giờ Việt Nam)
               const date = new Date().toLocaleDateString('vi-VN', {year: 'numeric', month: '2-digit', day: '2-digit', timeZone: 'Asia/Ho_Chi_Minh'}).replace(/\//g, '-');
               const finalFilename = \`data/topcv_ketoan_\${date}.csv\`;
               
               fs.mkdirSync('data', { recursive: true });
               fs.writeFileSync(finalFilename, '\ufeff' + stringify(finalData, { header: true }));
               console.log(`Đã tổng hợp \${finalData.length} tin duy nhất vào \${finalFilename}`);
-              // Xuất ra output để các bước sau sử dụng
-              console.log('::set-output name=final_filename::' + finalFilename);
-              console.log('::set-output name=jobs_count::' + finalData.length);
+              
+              // Sử dụng cú pháp mới để set output
+              fs.appendFileSync(process.env.GITHUB_OUTPUT, `final_filename=${finalFilename}\n`);
+              fs.appendFileSync(process.env.GITHUB_OUTPUT, `jobs_count=${finalData.length}\n`);
             } else {
               console.log('Không có dữ liệu mới để tổng hợp.');
-              console.log('::set-output name=jobs_count::0');
+              fs.appendFileSync(process.env.GITHUB_OUTPUT, 'jobs_count=0\n');
             }
           "
       - name: 'Commit results to repository'
-        # Chỉ commit nếu có dữ liệu mới được thu thập
         if: steps.combine.outputs.jobs_count > 0
         run: |
           git config --global user.name 'GitHub Actions Scraper'
