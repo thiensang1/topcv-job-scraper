@@ -1,5 +1,6 @@
-# --- QUY TRÌNH TỰ ĐỘNG HÓA CUỐI CÙNG - PHIÊN BẢN HOÀN THIỆN ---
+# --- QUY TRÌNH TỰ ĐỘNG HÓA - PHIÊN BẢN CHẨN ĐOÁN ---
 # Tên file: .github/workflows/scrape.yml
+# Mục đích: Thêm bước kiểm tra để xem các "bí mật" có được truyền đúng cách không.
 
 name: 'TopCV Daily Scraper'
 
@@ -45,11 +46,17 @@ jobs:
         run: npm install
       
       - name: 'Run collection worker'
-        # --- SỬA LỖI QUAN TRỌNG: Bổ sung PROXY_API_ENDPOINT ---
         env:
           PROXY_API_ENDPOINT: ${{ secrets.PROXY_API_ENDPOINT }}
           PROXY_API_KEY: ${{ secrets.PROXY_API_KEY }}
         run: |
+          # --- BƯỚC CHẨN ĐOÁN MỚI ---
+          echo "--- Chẩn đoán Bí mật ---"
+          echo "ENDPOINT: ${{ secrets.PROXY_API_ENDPOINT }}"
+          # In ra 'OK' nếu key tồn tại, 'NOT FOUND' nếu không, để đảm bảo an toàn
+          echo "KEY_STATUS: ${{ secrets.PROXY_API_KEY && 'OK' || 'NOT FOUND' }}" 
+          echo "--- Kết thúc Chẩn đoán ---"
+          
           PAGES_PER_WORKER=10
           TOTAL_PAGES=${{ needs.discover.outputs.totalPages }}
           WORKER_INDEX=${{ matrix.worker }}
