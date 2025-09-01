@@ -1,5 +1,5 @@
-// --- CÔNG NHÂN KHAI THÁC - PHIÊN BẢN "ĐẶC NHIỆM THÍCH ỨNG" ---
-// Nâng cấp: Tự động xoay vòng Proxy ngay giữa nhiệm vụ
+// --- CÔNG NHÂN KHAI THÁC - PHIÊN BẢN "PHIÊN DỊCH VIÊN" ---
+// Nâng cấp: Đọc và hiểu chính xác cấu trúc phản hồi từ KiotProxy API
 
 // Import các thư viện cần thiết
 const puppeteer = require('puppeteer-extra');
@@ -15,14 +15,13 @@ puppeteer.use(StealthPlugin());
 const BASE_URL = "https://www.topcv.vn";
 const BROWSER_TIMEOUT = 90000;
 const PAGE_LOAD_TIMEOUT = 60000;
-// Thời gian làm mới proxy (2.5 phút = 150000 ms), an toàn hơn so với 3 phút
-const PROXY_REFRESH_INTERVAL_MS = 150000; 
+const PROXY_REFRESH_INTERVAL_MS = 150000;
 
 // --- HÀM TIỆN ÍCH ---
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 const randomDelay = (min, max) => Math.random() * (max - min) + min;
 
-// --- HÀM LẤY PROXY MỚI TỪ API ---
+// --- HÀM LẤY PROXY MỚI (NÂNG CẤP "PHIÊN DỊCH VIÊN") ---
 async function getNewProxy(apiKey, apiEndpoint) {
     if (!apiKey || !apiEndpoint) {
         console.log("   -> Cảnh báo: Không có thông tin API Proxy. Chạy không cần proxy.");
@@ -35,7 +34,8 @@ async function getNewProxy(apiKey, apiEndpoint) {
             timeout: 15000
         });
 
-        if (response.data?.data?.proxy) {
+        // --- NÂNG CẤP "PHIÊN DỊCH VIÊN": Đọc đúng cấu trúc phản hồi từ tài liệu ---
+        if (response.data?.code === 0 && response.data?.data?.proxy) {
             const proxyData = response.data.data.proxy.split(':');
             if (proxyData.length === 4) {
                 const [host, port, user, pass] = proxyData;
@@ -43,12 +43,23 @@ async function getNewProxy(apiKey, apiEndpoint) {
                 return { host, port, user, pass };
             }
         }
-        throw new Error("Phản hồi từ API proxy không hợp lệ.");
+        // Nếu cấu trúc data trả về không đúng như mong đợi hoặc code != 0
+        throw new Error(`Phản hồi từ API proxy không hợp lệ. Dữ liệu nhận được: ${JSON.stringify(response.data)}`);
+
     } catch (error) {
-        console.error(`   -> Lỗi nghiêm trọng khi yêu cầu proxy mới: ${error.message}`);
+        console.error("   -> Lỗi nghiêm trọng khi yêu cầu proxy mới:");
+        if (error.response) {
+            console.error(`   -> BÁO CÁO: API trả về lỗi với mã trạng thái ${error.response.status}`);
+            console.error(`   -> NỘI DUNG PHẢN HỒI TỪ API: ${JSON.stringify(error.response.data)}`);
+        } else if (error.request) {
+            console.error("   -> BÁO CÁO: Yêu cầu đã được gửi đi nhưng không nhận được phản hồi từ máy chủ API.");
+        } else {
+            console.error(`   -> BÁO CÁO: Lỗi xảy ra trong quá trình thiết lập yêu cầu: ${error.message}`);
+        }
         return null;
     }
 }
+
 
 // --- HÀM KHỞI TẠO TRÌNH DUYỆT MỚI VỚI PROXY ---
 async function launchBrowserWithProxy(proxy) {
@@ -69,7 +80,6 @@ async function launchBrowserWithProxy(proxy) {
     return { browser, page };
 }
 
-
 // --- HÀM THU THẬP DỮ LIỆU CHÍNH ---
 async function scrapeTopCV(keyword, startPage, endPage, workerId) {
     console.log(`--- [Worker ${workerId}] Bắt đầu nhiệm vụ: Thu thập '${keyword}' từ trang ${startPage} đến ${endPage} ---`);
@@ -84,11 +94,10 @@ async function scrapeTopCV(keyword, startPage, endPage, workerId) {
 
     try {
         for (let i = startPage; i <= endPage; i++) {
-            // --- LOGIC "BIẾN HÌNH" ---
             const timeSinceLastRefresh = Date.now() - lastProxyRefreshTime;
             if (!currentProxy || timeSinceLastRefresh > PROXY_REFRESH_INTERVAL_MS) {
                 console.log(`   -> [Worker ${workerId}] Danh tính cũ đã hết hạn hoặc chưa có. Bắt đầu "biến hình"...`);
-                if (browser) await browser.close(); // Đóng trình duyệt cũ nếu có
+                if (browser) await browser.close(); 
                 
                 currentProxy = await getNewProxy(PROXY_API_KEY, PROXY_API_ENDPOINT);
                 if (!currentProxy) {
@@ -111,7 +120,6 @@ async function scrapeTopCV(keyword, startPage, endPage, workerId) {
                 const jobListSelector = 'div.job-list-search-result';
                 await page.waitForSelector(jobListSelector, { timeout: 30000 });
 
-                // Giai đoạn "quan sát kiên nhẫn" để chờ trang ổn định
                 let previousHtml = '', currentHtml = '', stabilityCounter = 0;
                 for (let check = 0; check < 10; check++) {
                     currentHtml = await page.$eval(jobListSelector, element => element.innerHTML);
@@ -139,7 +147,6 @@ async function scrapeTopCV(keyword, startPage, endPage, workerId) {
                 }
 
                  jobListings.each((index, element) => {
-                    // Logic trích xuất chi tiết... (giữ nguyên như cũ)
                     const titleTag = $(element).find('h3[class*="title"] a');
                     const companyLogoTag = $(element).find('img.w-100.lazy');
                     const salaryTag = $(element).find('.title-salary');
@@ -178,7 +185,6 @@ async function scrapeTopCV(keyword, startPage, endPage, workerId) {
 
             } catch (error) {
                 console.error(`   -> [Worker ${workerId}] Lỗi khi xử lý trang ${i}: ${error.message}`);
-                // Khi gặp lỗi trang, coi như đã đến trang cuối để chuyển sang worker khác
                 break; 
             }
         }
@@ -186,7 +192,7 @@ async function scrapeTopCV(keyword, startPage, endPage, workerId) {
 
     } catch (error) {
         console.error(`   -> [Worker ${workerId}] Lỗi nghiêm trọng không thể phục hồi: ${error.message}`);
-        return []; // Trả về mảng rỗng nếu có lỗi nghiêm trọng
+        return []; 
     } finally {
         if (browser) {
             await browser.close();
