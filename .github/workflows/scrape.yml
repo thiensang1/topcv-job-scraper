@@ -1,5 +1,5 @@
-# --- QUY TRÌNH TỰ ĐỘNG HÓA CUỐI CÙNG - PHIÊN BẢN "TIN TƯỞỞNG" ---
-# Cập nhật: Tin tưởng vào browser-actions và cơ chế tự tìm kiếm của Puppeteer.
+# --- QUY TRÌNH TỰ ĐỘNG HÓA CUỐI CÙNG - PHIÊN BẢN "TỰ CHỦ" ---
+# Cập nhật: Đảm bảo mỗi job (discover, collect) là tự chủ và cài đặt trình duyệt của riêng mình.
 
 name: 'TopCV Daily Scraper'
 
@@ -42,7 +42,7 @@ jobs:
             name: proxy-state-artifact
             path: proxy_state.json
 
-  # --- GIAI ĐOẠN 2: "TRINH SÁT NẰM VÙNG" ---
+  # --- GIAI ĐOẠN 2: "TRINH SÁT NẰM VÙNG" (Tự chủ) ---
   discover:
     needs: get-proxy-quartermaster
     runs-on: ubuntu-latest
@@ -55,8 +55,8 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '18'
-      # Thuê "Thợ sửa xe Chuyên nghiệp" để cài đặt trình duyệt
-      - name: 'Setup Chrome browser'
+      # "Trinh sát viên" tự thuê "Thợ sửa xe" của riêng mình
+      - name: 'Setup Chrome browser for Scout'
         uses: browser-actions/setup-chrome@latest
       - name: 'Install dependencies for scout'
         run: npm install puppeteer puppeteer-extra puppeteer-extra-plugin-stealth cheerio
@@ -67,7 +67,7 @@ jobs:
           PROXY_PORT: ${{ needs.get-proxy-quartermaster.outputs.proxy_port }}
         run: echo "count=$(node discover_pages.js)" >> $GITHUB_OUTPUT
 
-  # --- GIAI ĐOẠN 3: KHAI THÁC SONG SONG ---
+  # --- GIAI ĐOẠN 3: KHAI THÁC SONG SONG (Tự chủ) ---
   collect:
     needs: [discover, get-proxy-quartermaster]
     runs-on: ubuntu-latest
@@ -83,8 +83,8 @@ jobs:
         with:
           node-version: '18'
           cache: 'npm'
-      # Thuê "Thợ sửa xe Chuyên nghiệp" để cài đặt trình duyệt
-      - name: 'Setup Chrome browser'
+      # Mỗi "Công nhân" tự thuê "Thợ sửa xe" của riêng mình
+      - name: 'Setup Chrome browser for Collector'
         uses: browser-actions/setup-chrome@latest
       - name: 'Install all project dependencies'
         run: npm install
