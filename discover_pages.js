@@ -1,24 +1,23 @@
-// --- TRINH SÁT VIÊN - PHIÊN BẢN "BẢN ĐỒ" ---
-// Nhiệm vụ: Sử dụng Proxy và "Bản đồ Dẫn đường" (executablePath) để do thám địa hình.
+// --- TRINH SÁT VIÊN - PHIÊN BẢN "THÁM TỬ DÀY DẠN" ---
+// Cập nhật: Bỏ qua "hiện trường giả" (trang trống) và chỉ tin vào URL verification.
 
 const puppeteer = require('puppeteer-extra');
 const StealthPlugin = require('puppeteer-extra-plugin-stealth');
-const cheerio = require('cheerio');
 const { buildUrl } = require('./url_builder');
 
 puppeteer.use(StealthPlugin());
 
 // --- CẤU HÌNH ---
 const TARGET_KEYWORD = "ke-toan"; 
-const BROWSER_TIMEOUT = 60000;
+const BROWSER_TIMEOUT = 90000; 
 const PAGE_LOAD_TIMEOUT = 45000;
+const MAX_PAGES_TO_CHECK = 200; // Giới hạn an toàn để tránh vòng lặp vô tận
 
 async function discoverTotalPages() {
     let browser;
-    // Đọc thông tin proxy và "bản đồ" từ "bộ não" điều phối
     const PROXY_HOST = process.env.PROXY_HOST;
     const PROXY_PORT = process.env.PROXY_PORT;
-    const CHROME_EXECUTABLE_PATH = process.env.CHROME_PATH; // Nhận "tọa độ" của "chiếc xe"
+    const CHROME_EXECUTABLE_PATH = process.env.CHROME_PATH;
 
     if (!PROXY_HOST || !PROXY_PORT) {
         console.error("Lỗi nghiêm trọng: Trinh sát viên không được trang bị proxy. Dừng lại.");
@@ -37,12 +36,11 @@ async function discoverTotalPages() {
     ];
 
     try {
-        console.error(`[Trinh sát] Đang khởi tạo trình duyệt với danh tính ${PROXY_HOST}...`);
-        console.error(`[Trinh sát] Sử dụng "chiếc xe" tại: ${CHROME_EXECUTABLE_PATH}`);
+        console.error(`[Thám tử] Đang khởi tạo trình duyệt với danh tính ${PROXY_HOST}...`);
         
         browser = await puppeteer.launch({
             headless: true,
-            executablePath: CHROME_EXECUTABLE_PATH, // Sử dụng "Bản đồ" để khởi động đúng "chiếc xe"
+            executablePath: CHROME_EXECUTABLE_PATH,
             args: browserArgs,
             ignoreHTTPSErrors: true,
             timeout: BROWSER_TIMEOUT
@@ -51,42 +49,56 @@ async function discoverTotalPages() {
         const page = await browser.newPage();
         await page.setViewport({ width: 1920, height: 1080 });
 
-        const targetUrl = buildUrl(TARGET_KEYWORD, 1);
-        console.error(`[Trinh sát] Đang do thám địa hình tại: ${targetUrl}`);
-        
-        await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: PAGE_LOAD_TIMEOUT });
+        let lastKnownGoodPage = 1;
 
-        await page.waitForSelector('ul.pagination', { timeout: 30000 });
-        console.error("[Trinh sát] Đã phát hiện thanh phân trang.");
+        console.error("[Thám tử] Bắt đầu hành trình tìm kiếm 'rìa thế giới'...");
 
-        const content = await page.content();
-        const $ = cheerio.load(content);
+        for (let i = 1; i <= MAX_PAGES_TO_CHECK; i++) {
+            const targetUrl = buildUrl(TARGET_KEYWORD, i);
+            console.error(`   -> Đang thám hiểm trang ${i}...`);
+            
+            try {
+                await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: PAGE_LOAD_TIMEOUT });
 
-        let lastPage = 1;
-        const lastPageLink = $('ul.pagination li:nth-last-child(2) a');
+                const currentUrl = page.url();
 
-        if (lastPageLink.length > 0) {
-            const pageText = lastPageLink.text().trim();
-            const pageNumber = parseInt(pageText, 10);
-            if (!isNaN(pageNumber)) {
-                lastPage = pageNumber;
+                // Lấy số trang từ URL thực tế mà trình duyệt đang ở
+                const urlParams = new URLSearchParams(new URL(currentUrl).search);
+                const actualPage = parseInt(urlParams.get('page') || '1', 10);
+
+                // "Đối chiếu Hành trình" - Chỉ tin vào "la bàn"
+                if (actualPage < i) {
+                    console.error(`   -> Đã đến rìa thế giới! Bị đưa về trang ${actualPage} khi cố gắng đến trang ${i}.`);
+                    break; // Thoát khỏi vòng lặp
+                }
+                
+                // Nếu hành trình thành công, cập nhật lại vị trí đã biết
+                lastKnownGoodPage = i;
+                
+                // --- SỬA LỖI QUAN TRỌNG: Bỏ qua việc kiểm tra nội dung trang ---
+                // Chúng ta không còn tin vào "bằng chứng" này nữa vì nó có thể là một cái bẫy.
+
+            } catch (error) {
+                 console.error(`   -> Gặp lỗi khi thám hiểm trang ${i}: ${error.message}. Coi như đã đến trang cuối.`);
+                 break;
             }
         }
         
-        console.error(`[Trinh sát] Báo cáo: Phát hiện có tổng cộng ${lastPage} trang.`);
-        return lastPage;
+        console.error(`[Thám tử] Báo cáo: "Rìa thế giới" nằm ở trang ${lastKnownGoodPage}.`);
+        return lastKnownGoodPage;
 
     } catch (error) {
-        console.error(`[Trinh sát] Nhiệm vụ thất bại: ${error.message}`);
+        console.error(`[Thám tử] Nhiệm vụ thất bại: ${error.message}`);
         return 1;
     } finally {
         if (browser) {
             await browser.close();
-            console.error("[Trinh sát] Rút lui an toàn.");
+            console.error("[Thám tử] Rút lui an toàn.");
         }
     }
 }
 
+// Chạy hàm và chỉ in kết quả cuối cùng ra stdout
 discoverTotalPages().then(count => {
     process.stdout.write(count.toString());
 });
