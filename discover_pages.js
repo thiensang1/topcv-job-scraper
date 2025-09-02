@@ -1,5 +1,5 @@
-// --- TRINH SÁT VIÊN - PHIÊN BẢN "NGHE LÉN" ---
-// Cập nhật: Lắng nghe các yêu cầu mạng và đọc tổng số trang trực tiếp từ API.
+// --- TRINH SÁT VIÊN - PHIÊN BẢN "NHÀ THÁM HIỂM" ---
+// Cập nhật: Tự mình đi tìm trang cuối cùng bằng cách "Đối chiếu Hành trình".
 
 const puppeteer = require('puppeteer-extra');
 const StealthPlugin = require('puppeteer-extra-plugin-stealth');
@@ -9,10 +9,9 @@ puppeteer.use(StealthPlugin());
 
 // --- CẤU HÌNH ---
 const TARGET_KEYWORD = "ke-toan"; 
-const BROWSER_TIMEOUT = 60000;
+const BROWSER_TIMEOUT = 90000; // Tăng thời gian chờ cho các nhiệm vụ phức tạp
 const PAGE_LOAD_TIMEOUT = 45000;
-// URL của "tổng đài bí mật" (API) mà chúng ta cần nghe lén
-const API_URL_TO_INTERCEPT = 'api-v2.topcv.vn/jobs/search';
+const MAX_PAGES_TO_CHECK = 200; // Giới hạn an toàn để tránh vòng lặp vô tận
 
 async function discoverTotalPages() {
     let browser;
@@ -37,7 +36,7 @@ async function discoverTotalPages() {
     ];
 
     try {
-        console.error(`[Điệp viên] Đang khởi tạo trình duyệt với danh tính ${PROXY_HOST}...`);
+        console.error(`[Nhà Thám hiểm] Đang khởi tạo trình duyệt với danh tính ${PROXY_HOST}...`);
         
         browser = await puppeteer.launch({
             headless: true,
@@ -50,55 +49,54 @@ async function discoverTotalPages() {
         const page = await browser.newPage();
         await page.setViewport({ width: 1920, height: 1080 });
 
-        // --- LOGIC MỚI: "NGHE LÉN" ---
-        let lastPage = 1; // Giá trị mặc định nếu không nghe lén được
-        
-        // 1. Tạo một "lời hứa" - chương trình sẽ chờ cho đến khi lời hứa này được hoàn thành
-        const apiResponsePromise = new Promise((resolve, reject) => {
-            // 2. Bật "máy nghe lén"
-            page.on('response', async (response) => {
-                // 3. Kiểm tra xem "cuộc hội thoại" có đến từ đúng "tổng đài" không
-                if (response.url().includes(API_URL_TO_INTERCEPT) && response.request().method() === 'POST') {
-                    console.error("[Điệp viên] Đã bắt được tín hiệu từ tổng đài API...");
-                    try {
-                        const jsonResponse = await response.json();
-                        // 4. "Giải mã" gói tin và tìm thông tin tình báo
-                        if (jsonResponse && jsonResponse.data && jsonResponse.data.meta && jsonResponse.data.meta.last_page) {
-                            const totalPages = jsonResponse.data.meta.last_page;
-                            console.error(`[Điệp viên] Giải mã thành công. Báo cáo: có tổng cộng ${totalPages} trang.`);
-                            // 5. Hoàn thành "lời hứa" và gửi kết quả về
-                            resolve(totalPages);
-                        }
-                    } catch (e) {
-                        // Bỏ qua nếu không thể giải mã (ví dụ: các yêu cầu pre-flight OPTIONS)
-                    }
-                }
-            });
+        let currentPage = 1;
+        let lastKnownGoodPage = 1;
 
-            // Đặt một bộ đếm thời gian để tránh chờ đợi vô tận
-            setTimeout(() => {
-                reject(new Error("Hết thời gian chờ phản hồi từ API."));
-            }, 25000);
-        });
+        console.error("[Nhà Thám hiểm] Bắt đầu hành trình tìm kiếm 'rìa thế giới'...");
 
-        const targetUrl = buildUrl(TARGET_KEYWORD, 1);
-        console.error(`[Điệp viên] Đang tiếp cận mục tiêu để kích hoạt 'cuộc hội thoại': ${targetUrl}`);
-        
-        // 6. Kích hoạt "cuộc hội thoại" bằng cách truy cập trang
-        await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: PAGE_LOAD_TIMEOUT });
+        for (let i = 1; i <= MAX_PAGES_TO_CHECK; i++) {
+            const targetUrl = buildUrl(TARGET_KEYWORD, i);
+            console.error(`   -> Đang thám hiểm trang ${i}...`);
+            
+            await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: PAGE_LOAD_TIMEOUT });
 
-        // 7. Chờ "lời hứa" được hoàn thành (chờ "máy nghe lén" có kết quả)
-        lastPage = await apiResponsePromise;
+            const currentUrl = page.url();
+
+            // Lấy số trang từ URL thực tế mà trình duyệt đang ở
+            const urlParams = new URLSearchParams(new URL(currentUrl).search);
+            const actualPage = parseInt(urlParams.get('page') || '1', 10);
+
+            // "Đối chiếu Hành trình"
+            if (actualPage < i) {
+                // Nếu chúng ta muốn đến trang `i` nhưng lại bị đưa về một trang nhỏ hơn,
+                // có nghĩa là chúng ta đã "rơi khỏi rìa thế giới".
+                // Trang tốt cuối cùng mà chúng ta đã đến được chính là tổng số trang.
+                console.error(`   -> Đã đến rìa thế giới! Bị đưa về trang ${actualPage} khi cố gắng đến trang ${i}.`);
+                break; // Thoát khỏi vòng lặp
+            }
+            
+            // Nếu hành trình thành công, cập nhật lại vị trí đã biết
+            lastKnownGoodPage = i;
+            
+            // Kiểm tra xem có nội dung không, nếu trang trống thì cũng dừng lại
+             const jobListSelector = 'div.job-list-search-result';
+             const jobItems = await page.$$(jobListSelector + ' div[class*="job-item"]');
+             if (jobItems.length === 0) {
+                 console.error(`   -> Phát hiện trang ${i} không có nội dung. Dừng lại.`);
+                 break;
+             }
+        }
         
-        return lastPage;
+        console.error(`[Nhà Thám hiểm] Báo cáo: "Rìa thế giới" nằm ở trang ${lastKnownGoodPage}.`);
+        return lastKnownGoodPage;
 
     } catch (error) {
-        console.error(`[Điệp viên] Nhiệm vụ thất bại: ${error.message}`);
+        console.error(`[Nhà Thám hiểm] Nhiệm vụ thất bại: ${error.message}`);
         return 1;
     } finally {
         if (browser) {
             await browser.close();
-            console.error("[Điệp viên] Rút lui an toàn.");
+            console.error("[Nhà Thám hiểm] Rút lui an toàn.");
         }
     }
 }
