@@ -1,5 +1,5 @@
-// --- TRINH SÁT VIÊN - PHIÊN BẢN "NHÀ THÁM HIỂM" ---
-// Cập nhật: Tự mình đi tìm trang cuối cùng bằng cách "Đối chiếu Hành trình".
+// --- TRINH SÁT VIÊN - PHIÊN BẢN "THÁM TỬ DÀY DẠN" ---
+// Cập nhật: Bỏ qua "hiện trường giả" (trang trống) và chỉ tin vào URL verification.
 
 const puppeteer = require('puppeteer-extra');
 const StealthPlugin = require('puppeteer-extra-plugin-stealth');
@@ -9,7 +9,7 @@ puppeteer.use(StealthPlugin());
 
 // --- CẤU HÌNH ---
 const TARGET_KEYWORD = "ke-toan"; 
-const BROWSER_TIMEOUT = 90000; // Tăng thời gian chờ cho các nhiệm vụ phức tạp
+const BROWSER_TIMEOUT = 90000; 
 const PAGE_LOAD_TIMEOUT = 45000;
 const MAX_PAGES_TO_CHECK = 200; // Giới hạn an toàn để tránh vòng lặp vô tận
 
@@ -36,7 +36,7 @@ async function discoverTotalPages() {
     ];
 
     try {
-        console.error(`[Nhà Thám hiểm] Đang khởi tạo trình duyệt với danh tính ${PROXY_HOST}...`);
+        console.error(`[Thám tử] Đang khởi tạo trình duyệt với danh tính ${PROXY_HOST}...`);
         
         browser = await puppeteer.launch({
             headless: true,
@@ -49,54 +49,51 @@ async function discoverTotalPages() {
         const page = await browser.newPage();
         await page.setViewport({ width: 1920, height: 1080 });
 
-        let currentPage = 1;
         let lastKnownGoodPage = 1;
 
-        console.error("[Nhà Thám hiểm] Bắt đầu hành trình tìm kiếm 'rìa thế giới'...");
+        console.error("[Thám tử] Bắt đầu hành trình tìm kiếm 'rìa thế giới'...");
 
         for (let i = 1; i <= MAX_PAGES_TO_CHECK; i++) {
             const targetUrl = buildUrl(TARGET_KEYWORD, i);
             console.error(`   -> Đang thám hiểm trang ${i}...`);
             
-            await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: PAGE_LOAD_TIMEOUT });
+            try {
+                await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: PAGE_LOAD_TIMEOUT });
 
-            const currentUrl = page.url();
+                const currentUrl = page.url();
 
-            // Lấy số trang từ URL thực tế mà trình duyệt đang ở
-            const urlParams = new URLSearchParams(new URL(currentUrl).search);
-            const actualPage = parseInt(urlParams.get('page') || '1', 10);
+                // Lấy số trang từ URL thực tế mà trình duyệt đang ở
+                const urlParams = new URLSearchParams(new URL(currentUrl).search);
+                const actualPage = parseInt(urlParams.get('page') || '1', 10);
 
-            // "Đối chiếu Hành trình"
-            if (actualPage < i) {
-                // Nếu chúng ta muốn đến trang `i` nhưng lại bị đưa về một trang nhỏ hơn,
-                // có nghĩa là chúng ta đã "rơi khỏi rìa thế giới".
-                // Trang tốt cuối cùng mà chúng ta đã đến được chính là tổng số trang.
-                console.error(`   -> Đã đến rìa thế giới! Bị đưa về trang ${actualPage} khi cố gắng đến trang ${i}.`);
-                break; // Thoát khỏi vòng lặp
-            }
-            
-            // Nếu hành trình thành công, cập nhật lại vị trí đã biết
-            lastKnownGoodPage = i;
-            
-            // Kiểm tra xem có nội dung không, nếu trang trống thì cũng dừng lại
-             const jobListSelector = 'div.job-list-search-result';
-             const jobItems = await page.$$(jobListSelector + ' div[class*="job-item"]');
-             if (jobItems.length === 0) {
-                 console.error(`   -> Phát hiện trang ${i} không có nội dung. Dừng lại.`);
+                // "Đối chiếu Hành trình" - Chỉ tin vào "la bàn"
+                if (actualPage < i) {
+                    console.error(`   -> Đã đến rìa thế giới! Bị đưa về trang ${actualPage} khi cố gắng đến trang ${i}.`);
+                    break; // Thoát khỏi vòng lặp
+                }
+                
+                // Nếu hành trình thành công, cập nhật lại vị trí đã biết
+                lastKnownGoodPage = i;
+                
+                // --- SỬA LỖI QUAN TRỌNG: Bỏ qua việc kiểm tra nội dung trang ---
+                // Chúng ta không còn tin vào "bằng chứng" này nữa vì nó có thể là một cái bẫy.
+
+            } catch (error) {
+                 console.error(`   -> Gặp lỗi khi thám hiểm trang ${i}: ${error.message}. Coi như đã đến trang cuối.`);
                  break;
-             }
+            }
         }
         
-        console.error(`[Nhà Thám hiểm] Báo cáo: "Rìa thế giới" nằm ở trang ${lastKnownGoodPage}.`);
+        console.error(`[Thám tử] Báo cáo: "Rìa thế giới" nằm ở trang ${lastKnownGoodPage}.`);
         return lastKnownGoodPage;
 
     } catch (error) {
-        console.error(`[Nhà Thám hiểm] Nhiệm vụ thất bại: ${error.message}`);
+        console.error(`[Thám tử] Nhiệm vụ thất bại: ${error.message}`);
         return 1;
     } finally {
         if (browser) {
             await browser.close();
-            console.error("[Nhà Thám hiểm] Rút lui an toàn.");
+            console.error("[Thám tử] Rút lui an toàn.");
         }
     }
 }
