@@ -1,5 +1,5 @@
-# --- QUY TRÌNH TỰ ĐỘNG HÓA CUỐI CÙNG - PHIÊN BẢN "LỆCH PHA NGẪU NHIÊN" ---
-# Cập nhật: Thêm khoảng nghỉ ngẫu nhiên và lệch pha cho mỗi worker.
+# --- QUY TRÌNH TỰ ĐỘNG HÓA CUỐI CÙNG - PHIÊN BẢN "TIN TƯỞỞNG" ---
+# Cập nhật: Tin tưởng vào browser-actions và cơ chế tự tìm kiếm của Puppeteer.
 
 name: 'TopCV Daily Scraper'
 
@@ -48,7 +48,6 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       totalPages: ${{ steps.get_pages.outputs.count }}
-      chrome_path: ${{ steps.setup_chrome.outputs.chrome-path }}
     steps:
       - name: 'Checkout repository'
         uses: actions/checkout@v4
@@ -56,8 +55,8 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '18'
+      # Thuê "Thợ sửa xe Chuyên nghiệp" để cài đặt trình duyệt
       - name: 'Setup Chrome browser'
-        id: setup_chrome
         uses: browser-actions/setup-chrome@latest
       - name: 'Install dependencies for scout'
         run: npm install puppeteer puppeteer-extra puppeteer-extra-plugin-stealth cheerio
@@ -66,10 +65,9 @@ jobs:
         env:
           PROXY_HOST: ${{ needs.get-proxy-quartermaster.outputs.proxy_host }}
           PROXY_PORT: ${{ needs.get-proxy-quartermaster.outputs.proxy_port }}
-          CHROME_PATH: ${{ steps.setup_chrome.outputs.chrome-path }}
         run: echo "count=$(node discover_pages.js)" >> $GITHUB_OUTPUT
 
-  # --- GIAI ĐOẠN 3: TRIỂN KHAI "ĐÀN KIẾN" ---
+  # --- GIAI ĐOẠN 3: KHAI THÁC SONG SONG ---
   collect:
     needs: [discover, get-proxy-quartermaster]
     runs-on: ubuntu-latest
@@ -85,35 +83,19 @@ jobs:
         with:
           node-version: '18'
           cache: 'npm'
+      # Thuê "Thợ sửa xe Chuyên nghiệp" để cài đặt trình duyệt
       - name: 'Setup Chrome browser'
-        id: setup_chrome
         uses: browser-actions/setup-chrome@latest
       - name: 'Install all project dependencies'
         run: npm install
       
       - name: 'Run collection worker'
         run: |
-          # --- LOGIC MỚI: "LỆCH PHA NGẪU NHIÊN" ---
-          # 1. Tính toán khoảng nghỉ cơ bản để đảm bảo cách nhau ~2.5 phút
-          # Ví dụ: Worker 1 nghỉ 0s, Worker 2 nghỉ 150s, Worker 3 nghỉ 300s...
-          BASE_DELAY=$(( (${{ matrix.worker }} - 1) * 150 ))
-          
-          # 2. Cộng thêm một khoảng nghỉ ngẫu nhiên (từ 1 đến 15 giây)
-          RANDOM_DELAY=$(( RANDOM % 15 + 1 ))
-          
-          # 3. Tổng hợp lại thời gian chờ cuối cùng
-          TOTAL_DELAY=$(( BASE_DELAY + RANDOM_DELAY ))
-          
-          echo "Worker ${{ matrix.worker }} sẽ xuất kích sau ${TOTAL_DELAY} giây..."
-          sleep $TOTAL_DELAY
-          
-          # 4. Bắt đầu nhiệm vụ sau khi đã nghỉ ngơi
           PAGES_PER_WORKER=10
           TOTAL_PAGES=${{ needs.discover.outputs.totalPages }}
           PROXY_HOST=${{ needs.get-proxy-quartermaster.outputs.proxy_host }}
           PROXY_PORT=${{ needs.get-proxy-quartermaster.outputs.proxy_port }}
           WORKER_INDEX=${{ matrix.worker }}
-          CHROME_PATH="${{ steps.setup_chrome.outputs.chrome-path }}"
           
           START_PAGE=$(( (WORKER_INDEX - 1) * PAGES_PER_WORKER + 1 ))
           END_PAGE=$(( WORKER_INDEX * PAGES_PER_WORKER ))
@@ -123,7 +105,8 @@ jobs:
           fi
           
           if (( START_PAGE <= TOTAL_PAGES )); then
-            node collector.js "ke-toan" $START_PAGE $END_PAGE $WORKER_INDEX "$CHROME_PATH" $PROXY_HOST $PROXY_PORT 
+            # Không cần truyền CHROME_PATH nữa
+            node collector.js "ke-toan" $START_PAGE $END_PAGE $WORKER_INDEX $PROXY_HOST $PROXY_PORT
           else
             echo "Worker ${{ matrix.worker }} không cần chạy."
           fi
