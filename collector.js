@@ -1,5 +1,5 @@
-// --- CÔNG NHÂN KHAI THÁC - PHIÊN BẢN "TỰ CHỦ" / "TIN TƯỞNG" ---
-// Cập nhật: Tin tưởng vào cơ chế tìm kiếm trình duyệt mặc định của Puppeteer.
+// --- CÔNG NHÂN KHAI THÁC - PHIÊN BẢN "BẢN ĐỒ" ---
+// Nhiệm vụ: Nhận "nhu yếu phẩm" (proxy) và "Bản đồ Dẫn đường" (executablePath) để thực hiện nhiệm vụ.
 
 const puppeteer = require('puppeteer-extra');
 const StealthPlugin = require('puppeteer-extra-plugin-stealth');
@@ -19,7 +19,7 @@ const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 const randomDelay = (min, max) => Math.random() * (max - min) + min;
 
 // --- HÀM THU THẬP DỮ LIỆU CHÍNH ---
-async function scrapeTopCV(keyword, startPage, endPage, workerId, proxy) {
+async function scrapeTopCV(keyword, startPage, endPage, workerId, proxy, chromePath) {
     // Chuyển toàn bộ nhật ký sang stderr
     console.error(`--- [Worker ${workerId}] Bắt đầu nhiệm vụ: Thu thập '${keyword}' từ trang ${startPage} đến ${endPage} ---`);
     
@@ -27,6 +27,10 @@ async function scrapeTopCV(keyword, startPage, endPage, workerId, proxy) {
     
     if (!proxy || !proxy.host || !proxy.port) {
         console.error(`   -> [Worker ${workerId}] Lỗi nghiêm trọng: Không nhận được thông tin proxy. Dừng lại.`);
+        return [];
+    }
+    if (!chromePath) {
+        console.error(`   -> [Worker ${workerId}] Lỗi nghiêm trọng: Không nhận được 'Bản đồ Dẫn đường'. Dừng lại.`);
         return [];
     }
 
@@ -37,9 +41,10 @@ async function scrapeTopCV(keyword, startPage, endPage, workerId, proxy) {
     ];
 
     try {
-        // Tin tưởng Puppeteer tự tìm trình duyệt đã được cài đặt bởi browser-actions
+        console.error(`   -> [Worker ${workerId}] Sử dụng "chiếc xe" tại: ${chromePath}`);
         browser = await puppeteer.launch({
             headless: true,
+            executablePath: chromePath, // Sử dụng "Bản đồ"
             args: browserArgs,
             ignoreHTTPSErrors: true,
             timeout: BROWSER_TIMEOUT
@@ -138,18 +143,18 @@ async function scrapeTopCV(keyword, startPage, endPage, workerId, proxy) {
 
 // --- HÀM MAIN ĐỂ CHẠY TỪ DÒNG LỆNH ---
 (async () => {
-    // Cập nhật: không còn nhận chromePath nữa
+    // Cập nhật để nhận thêm tham số chromePath
     const args = process.argv.slice(2);
-    if (args.length !== 6) {
-        console.error("Cách dùng: node collector.js [keyword] [startPage] [endPage] [workerId] [proxyHost] [proxyPort]");
+    if (args.length !== 7) {
+        console.error("Cách dùng: node collector.js [keyword] [startPage] [endPage] [workerId] [proxyHost] [proxyPort] [chromePath]");
         process.exit(1);
     }
-    const [keyword, startPageStr, endPageStr, workerId, proxyHost, proxyPort] = args;
+    const [keyword, startPageStr, endPageStr, workerId, proxyHost, proxyPort, chromePath] = args;
     const startPage = parseInt(startPageStr, 10);
     const endPage = parseInt(endPageStr, 10);
     const proxy = { host: proxyHost, port: proxyPort };
 
-    const results = await scrapeTopCV(keyword, startPage, endPage, workerId, proxy);
+    const results = await scrapeTopCV(keyword, startPage, endPage, workerId, proxy, chromePath);
 
     if (results.length > 0) {
         const outputFilename = `results_worker_${workerId}.csv`;
@@ -160,5 +165,3 @@ async function scrapeTopCV(keyword, startPage, endPage, workerId, proxy) {
         console.error(`[Worker ${workerId}] Không thu thập được dữ liệu nào.`);
     }
 })();
-
-
