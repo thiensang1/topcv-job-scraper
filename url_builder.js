@@ -1,7 +1,6 @@
-// --- NGUỒN CHÂN LÝ DUY NHẤT CHO URL ---
+// --- NGUỒN CHÂN LÝ DUY NHẤT CHO URL - PHIÊN BẢN SỬA LỖI CÚ PHÁP ---
 // Tên file: url_builder.js
-// Mục đích: Cung cấp một hàm duy nhất để tạo URL, đảm bảo tính nhất quán
-// cho cả trinh sát viên và công nhân.
+// Cập nhật: Sửa lỗi cú pháp bằng cách sử dụng dấu backtick (`) cho chuỗi mẫu.
 
 const BASE_URL = "https://www.topcv.vn";
 
@@ -12,14 +11,14 @@ const BASE_URL = "https://www.topcv.vn";
  * @returns {string} URL hoàn chỉnh.
  */
 function buildUrl(keyword, page) {
-    // Logic tạo URL đã được kiểm chứng, giờ đây được tập trung tại một nơi duy nhất.
+    // SỬA LỖI: Sử dụng dấu backtick `...` thay vì dấu nháy đơn '...'
     if (keyword === 'ke-toan') {
-        return ${BASE_URL}/tim-viec-lam-ke-toan-cr392cb393?type_keyword=1&page=${page}&category_family=r392~b393;
+        return `${BASE_URL}/tim-viec-lam-ke-toan-cr392cb393?type_keyword=1&page=${page}&category_family=r392~b393`;
     } else {
-        // Cấu trúc URL mặc định cho các từ khóa khác
-        return ${BASE_URL}/tim-viec-lam-${keyword}?type_keyword=1&page=${page}&sba=1;
+        return `${BASE_URL}/tim-viec-lam-${keyword}?type_keyword=1&page=${page}&sba=1`;
     }
 }
 
 // "Xuất bản" hàm này để các file khác có thể "nhập khẩu" và sử dụng.
 module.exports = { buildUrl };
+
