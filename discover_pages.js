@@ -1,4 +1,4 @@
-// --- TRINH SÁT VIÊN - PHIÊN BẢN "TIN TƯỞNG" ---
+// --- TRINH SÁT VIÊN - PHIÊN BẢN "TỰ CHỦ" / "TIN TƯỞNG" ---
 // Cập nhật: Tin tưởng vào cơ chế tìm kiếm trình duyệt mặc định của Puppeteer.
 
 const puppeteer = require('puppeteer-extra');
