@@ -1,5 +1,5 @@
-# --- QUY TRÌNH TỰ ĐỘNG HÓA CUỐI CÙNG - PHIÊN BẢN "BẢN ĐỒ" ---
-# Cập nhật: Lấy tọa độ trình duyệt và cung cấp cho các script.
+# --- QUY TRÌNH TỰ ĐỘNG HÓA CUỐI CÙNG - PHIÊN BẢN "CHỚP NHOÁNG" ---
+# Cập nhật: Tự động triển khai một "đặc nhiệm" cho mỗi trang cần thu thập.
 
 name: 'TopCV Daily Scraper'
 
@@ -42,13 +42,13 @@ jobs:
             name: proxy-state-artifact
             path: proxy_state.json
 
-  # --- GIAI ĐOẠN 2: "TRINH SÁT NẰM VÙNG" ---
+  # --- GIAI ĐOẠN 2: "THÁM TỬ DÀY DẠN" ---
   discover:
     needs: get-proxy-quartermaster
     runs-on: ubuntu-latest
     outputs:
       totalPages: ${{ steps.get_pages.outputs.count }}
-      chrome_path: ${{ steps.setup_chrome.outputs.chrome-path }} # Xuất ra "tọa độ"
+      chrome_path: ${{ steps.setup_chrome.outputs.chrome-path }}
     steps:
       - name: 'Checkout repository'
         uses: actions/checkout@v4
@@ -56,9 +56,8 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '18'
-      # --- SỬA LỖI: Thuê "Thợ sửa xe" và Gắn "Thiết bị Định vị" ---
       - name: 'Setup Chrome browser'
-        id: setup_chrome # Đặt ID để lấy output
+        id: setup_chrome
         uses: browser-actions/setup-chrome@latest
       - name: 'Install dependencies for scout'
         run: npm install puppeteer puppeteer-extra puppeteer-extra-plugin-stealth cheerio
@@ -67,17 +66,33 @@ jobs:
         env:
           PROXY_HOST: ${{ needs.get-proxy-quartermaster.outputs.proxy_host }}
           PROXY_PORT: ${{ needs.get-proxy-quartermaster.outputs.proxy_port }}
-          CHROME_PATH: ${{ steps.setup_chrome.outputs.chrome-path }} # Cung cấp "Bản đồ" cho Trinh sát viên
+          CHROME_PATH: ${{ steps.setup_chrome.outputs.chrome-path }}
         run: echo "count=$(node discover_pages.js)" >> $GITHUB_OUTPUT
 
-  # --- GIAI ĐOẠN 3: KHAI THÁC SONG SONG ---
+  # --- GIAI ĐOẠN 3: TẠO "KẾ HOẠCH TÁC CHIẾN" ---
+  generate-matrix:
+    needs: discover
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+      - name: Generate page matrix
+        id: set-matrix
+        # Tạo ra một chuỗi JSON chứa danh sách các trang cần thu thập
+        run: |
+          totalPages=${{ needs.discover.outputs.totalPages }}
+          # Tạo một chuỗi các số từ 1 đến totalPages, cách nhau bằng dấu phẩy
+          pages=$(seq -s, 1 $totalPages)
+          echo "matrix={\"page\":[${pages}]}" >> $GITHUB_OUTPUT
+
+  # --- GIAI ĐOẠN 4: TRIỂN KHAI "CHIẾN DỊCH CHỚP NHOÁNG" ---
   collect:
-    needs: [discover, get-proxy-quartermaster]
+    needs: [generate-matrix, get-proxy-quartermaster, discover]
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
-      matrix:
-        worker: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15] 
+      # "Bộ não" đọc "kế hoạch tác chiến" và triển khai một "đặc nhiệm" cho mỗi trang
+      matrix: ${{ fromJson(needs.generate-matrix.outputs.matrix) }}
     steps:
       - name: 'Checkout repository'
         uses: actions/checkout@v4
@@ -86,45 +101,33 @@ jobs:
         with:
           node-version: '18'
           cache: 'npm'
-      # --- SỬA LỖI: Thuê "Thợ sửa xe" cho mỗi công nhân ---
       - name: 'Setup Chrome browser'
         id: setup_chrome
         uses: browser-actions/setup-chrome@latest
       - name: 'Install all project dependencies'
         run: npm install
       
-      - name: 'Run collection worker'
+      - name: 'Run collection agent for page ${{ matrix.page }}'
         run: |
-          PAGES_PER_WORKER=10
-          TOTAL_PAGES=${{ needs.discover.outputs.totalPages }}
           PROXY_HOST=${{ needs.get-proxy-quartermaster.outputs.proxy_host }}
           PROXY_PORT=${{ needs.get-proxy-quartermaster.outputs.proxy_port }}
-          WORKER_INDEX=${{ matrix.worker }}
-          CHROME_PATH="${{ steps.setup_chrome.outputs.chrome-path }}" # Nhận "Bản đồ" từ bước setup_chrome của job này
+          CHROME_PATH="${{ needs.discover.outputs.chrome_path }}"
+          PAGE_NUM=${{ matrix.page }}
           
-          START_PAGE=$(( (WORKER_INDEX - 1) * PAGES_PER_WORKER + 1 ))
-          END_PAGE=$(( WORKER_INDEX * PAGES_PER_WORKER ))
-          
-          if (( END_PAGE > TOTAL_PAGES )); then
-            END_PAGE=$TOTAL_PAGES
-          fi
-          
-          if (( START_PAGE <= TOTAL_PAGES )); then
-            # Cung cấp "Bản đồ" cho Công nhân
-            node collector.js "ke-toan" $START_PAGE $END_PAGE $WORKER_INDEX $PROXY_HOST $PROXY_PORT "$CHROME_PATH"
-          else
-            echo "Worker ${{ matrix.worker }} không cần chạy."
-          fi
+          # Mỗi "đặc nhiệm" chỉ chạy cho 1 trang duy nhất
+          node collector.js "ke-toan" $PAGE_NUM "$CHROME_PATH" $PROXY_HOST $PROXY_PORT
       
-      - name: 'Upload worker artifact'
+      - name: 'Upload page artifact'
         uses: actions/upload-artifact@v4
         with:
-          name: raw-results-${{ matrix.worker }}
-          path: results_worker_${{ matrix.worker }}.csv
+          # Tên artifact giờ đây được đặt theo số trang
+          name: raw-results-page-${{ matrix.page }}
+          path: results_page_${{ matrix.page }}.csv
           if-no-files-found: ignore
 
-  # --- GIAI ĐOẠN 4: TỔNG HỢP VÀ LƯU TRỮ ---
+  # --- GIAI ĐOẠN 5: TỔNG HỢP VÀ LƯU TRỮ ---
   combine-and-commit:
+    # Cần tất cả các "đặc nhiệm" hoàn thành
     needs: collect
     runs-on: ubuntu-latest
     steps:
