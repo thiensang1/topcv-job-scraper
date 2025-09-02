@@ -1,142 +1,146 @@
---- QUY TRÌNH TỰ ĐỘNG HÓA CUỐI CÙNG - PHIÊN BẢN "TỐI THƯỢNG" ---
-Kết hợp logic "Thám tử", kiến trúc "Tự chủ", và chiến thuật "Chớp nhoáng".
+# --- QUY TRÌNH TỰ ĐỘNG HÓA CUỐI CÙNG - PHIÊN BẢN "TỰ CHỦ" ---
+# Cập nhật: Đảm bảo mỗi job (discover, collect) là tự chủ và cài đặt trình duyệt của riêng mình.
+
 name: 'TopCV Daily Scraper'
 
 on:
-schedule:
-- cron: '0 0 * * *' # Nửa đêm giờ UTC (7h sáng giờ VN)
-workflow_dispatch:
+  schedule:
+    - cron: '0 0 * * *' # Nửa đêm giờ UTC (7h sáng giờ VN)
+  workflow_dispatch:
 
 jobs:
+  # --- GIAI ĐOẠN 1: BỔ NHIỆM "TỔNG QUẢN" ---
+  get-proxy-quartermaster:
+    runs-on: ubuntu-latest
+    outputs:
+      proxy_host: ${{ steps.proxy_info.outputs.proxy_host }}
+      proxy_port: ${{ steps.proxy_info.outputs.proxy_port }}
+    steps:
+      - name: 'Checkout repository'
+        uses: actions/checkout@v4
+      - name: 'Set up Node.js'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+      - name: 'Download previous proxy state'
+        uses: actions/download-artifact@v4
+        with:
+            name: proxy-state-artifact
+            path: .
+        continue-on-error: true
+      - name: 'Install dependencies for Quartermaster'
+        run: npm install axios
+      - name: 'Run Quartermaster to get a valid proxy'
+        id: proxy_info
+        env:
+          PROXY_API_ENDPOINT: ${{ secrets.PROXY_API_ENDPOINT }}
+          PROXY_API_KEY: ${{ secrets.PROXY_API_KEY }}
+        run: node get_proxy.js
+      - name: 'Persist proxy state'
+        uses: actions/upload-artifact@v4
+        with:
+            name: proxy-state-artifact
+            path: proxy_state.json
 
---- GIAI ĐOẠN 1: BỔ NHIỆM "TỔNG QUẢN" ---
-get-proxy-quartermaster:
-runs-on: ubuntu-latest
-outputs:
-proxy_host: ${{ steps.proxy_info.outputs.proxy_host }}
-proxy_port: ${{ steps.proxy_info.outputs.proxy_port }}
-steps:
-- name: 'Checkout repository'
-uses: actions/checkout@v4
-- name: 'Set up Node.js'
-uses: actions/setup-node@v4
-with:
-node-version: '18'
-- name: 'Download previous proxy state'
-uses: actions/download-artifact@v4
-with:
-name: proxy-state-artifact
-path: .
-continue-on-error: true
-- name: 'Install dependencies for Quartermaster'
-run: npm install axios
-- name: 'Run Quartermaster to get a valid proxy'
-id: proxy_info
-env:
-PROXY_API_ENDPOINT: ${{ secrets.PROXY_API_ENDPOINT }}
-PROXY_API_KEY: ${{ secrets.PROXY_API_KEY }}
-run: node get_proxy.js
-- name: 'Persist proxy state'
-uses: actions/upload-artifact@v4
-with:
-name: proxy-state-artifact
-path: proxy_state.json
+  # --- GIAI ĐOẠN 2: "THÁM TỬ DÀY DẠN" (Tự chủ) ---
+  discover:
+    needs: get-proxy-quartermaster
+    runs-on: ubuntu-latest
+    outputs:
+      totalPages: ${{ steps.get_pages.outputs.count }}
+    steps:
+      - name: 'Checkout repository'
+        uses: actions/checkout@v4
+      - name: 'Set up Node.js'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+      # "Thám tử" tự thuê "Thợ sửa xe" của riêng mình
+      - name: 'Setup Chrome browser for Scout'
+        uses: browser-actions/setup-chrome@latest
+      - name: 'Install dependencies for scout'
+        run: npm install puppeteer puppeteer-extra puppeteer-extra-plugin-stealth cheerio
+      - name: 'Run scout script to get total pages'
+        id: get_pages
+        env:
+          PROXY_HOST: ${{ needs.get-proxy-quartermaster.outputs.proxy_host }}
+          PROXY_PORT: ${{ needs.get-proxy-quartermaster.outputs.proxy_port }}
+        run: echo "count=$(node discover_pages.js)" >> $GITHUB_OUTPUT
 
---- GIAI ĐOẠN 2: "THÁM TỬ DÀY DẠN" (Tự chủ) ---
-discover:
-needs: get-proxy-quartermaster
-runs-on: ubuntu-latest
-outputs:
-totalPages: ${{ steps.get_pages.outputs.count }}
-steps:
-- name: 'Checkout repository'
-uses: actions/checkout@v4
-- name: 'Set up Node.js'
-uses: actions/setup-node@v4
-with:
-node-version: '18'
-# "Thám tử" tự thuê "Thợ sửa xe" của riêng mình
-- name: 'Setup Chrome browser for Scout'
-uses: browser-actions/setup-chrome@latest
-- name: 'Install dependencies for scout'
-run: npm install puppeteer puppeteer-extra puppeteer-extra-plugin-stealth cheerio
-- name: 'Run scout script to get total pages'
-id: get_pages
-env:
-PROXY_HOST: ${{ needs.get-proxy-quartermaster.outputs.proxy_host }}
-PROXY_PORT: needs.get−proxy−quartermaster.outputs.proxy_portrun:echo"count=(node discover_pages.js)" >> $GITHUB_OUTPUT
+  # --- GIAI ĐOẠN 3: TẠO "KẾ HOẠCH TÁC CHIẾN" ---
+  generate-matrix:
+    needs: discover
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+      - name: Generate page matrix
+        id: set-matrix
+        run: |
+          totalPages=${{ needs.discover.outputs.totalPages }}
+          pages=$(seq -s, 1 $totalPages)
+          echo "matrix={\"page\":[${pages}]}" >> $GITHUB_OUTPUT
 
---- GIAI ĐOẠN 3: TẠO "KẾ HOẠCH TÁC CHIẾN" ---
-generate-matrix:
-needs: discover
-runs-on: ubuntu-latest
-outputs:
-matrix: steps.set−matrix.outputs.matrixsteps:\-name:Generatepagematrixid:set−matrixrun:∣totalPages={{ needs.discover.outputs.totalPages }}
-# Tạo một chuỗi các số từ 1 đến totalPages, cách nhau bằng dấu phẩy
-pages=$(seq -s, 1 totalPages)
-echo "matrix={"page":[{pages}]}" >> $GITHUB_OUTPUT
-
---- GIAI ĐOẠN 4: TRIỂN KHAI "CHIẾN DỊCH CHỚP NHOÁNG" (Tự chủ) ---
-collect:
-needs: [generate-matrix, get-proxy-quartermaster]
-runs-on: ubuntu-latest
-strategy:
-fail-fast: false
-# "Bộ não" đọc "kế hoạch tác chiến" và triển khai một "đặc nhiệm" cho mỗi trang
-matrix: ${{ fromJson(needs.generate-matrix.outputs.matrix) }}
-steps:
-- name: 'Checkout repository'
-uses: actions/checkout@v4
-- name: 'Set up Node.js'
-uses: actions/setup-node@v4
-with:
-node-version: '18'
-cache: 'npm'
-# Mỗi "Đặc nhiệm" tự thuê "Thợ sửa xe" của riêng mình
-- name: 'Setup Chrome browser for Agent'
-uses: browser-actions/setup-chrome@latest
-- name: 'Install all project dependencies'
-run: npm install
-
-  - name: 'Run collection agent for page ${{ matrix.page }}'
-    run: |
-      PROXY_HOST=${{ needs.get-proxy-quartermaster.outputs.proxy_host }}
-      PROXY_PORT=${{ needs.get-proxy-quartermaster.outputs.proxy_port }}
-      PAGE_NUM=${{ matrix.page }}
+  # --- GIAI ĐOẠN 4: TRIỂN KHAI "CHIẾN DỊCH CHỚP NHOÁNG" (Tự chủ) ---
+  collect:
+    needs: [generate-matrix, get-proxy-quartermaster]
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.generate-matrix.outputs.matrix) }}
+    steps:
+      - name: 'Checkout repository'
+        uses: actions/checkout@v4
+      - name: 'Set up Node.js'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+      # Mỗi "Đặc nhiệm" tự thuê "Thợ sửa xe" của riêng mình
+      - name: 'Setup Chrome browser for Agent'
+        uses: browser-actions/setup-chrome@latest
+      - name: 'Install all project dependencies'
+        run: npm install
       
-      # Mỗi "đặc nhiệm" chỉ chạy cho 1 trang duy nhất
-      node collector.js "ke-toan" $PAGE_NUM $PROXY_HOST $PROXY_PORT
-  
-  - name: 'Upload page artifact'
-    uses: actions/upload-artifact@v4
-    with:
-      name: raw-results-page-${{ matrix.page }}
-      path: results_page_${{ matrix.page }}.csv
-      if-no-files-found: ignore
+      - name: 'Run collection agent for page ${{ matrix.page }}'
+        run: |
+          PROXY_HOST=${{ needs.get-proxy-quartermaster.outputs.proxy_host }}
+          PROXY_PORT=${{ needs.get-proxy-quartermaster.outputs.proxy_port }}
+          PAGE_NUM=${{ matrix.page }}
+          
+          node collector.js "ke-toan" $PAGE_NUM $PROXY_HOST $PROXY_PORT
+      
+      - name: 'Upload page artifact'
+        uses: actions/upload-artifact@v4
+        with:
+          name: raw-results-page-${{ matrix.page }}
+          path: results_page_${{ matrix.page }}.csv
+          if-no-files-found: ignore
 
---- GIAI ĐOẠN 5: TỔNG HỢP VÀ LƯU TRỮ ---
-combine-and-commit:
-needs: collect
-runs-on: ubuntu-latest
-steps:
-- name: 'Checkout repository'
-uses: actions/checkout@v4
-- name: 'Set up Node.js'
-uses: actions/setup-node@v4
-with:
-node-version: '18'
-- name: 'Download all worker artifacts'
-uses: actions/download-artifact@v4
-with:
-path: ./raw-results
-- name: 'Run combination script'
-id: combine
-run: node combine_results.js
-
-  - name: 'Commit results to repository'
-    if: steps.combine.outputs.jobs_count > 0
-    run: |
-      git config --global user.name 'GitHub Actions Scraper'
-      git config --global user.email 'actions@github.com'
-      git add ${{ steps.combine.outputs.final_filename }}
-      git commit -m "📊 Dữ liệu TopCV: Thêm ${{ steps.combine.outputs.jobs_
+  # --- GIAI ĐOẠN 5: TỔNG HỢP VÀ LƯU TRỮ ---
+  combine-and-commit:
+    needs: collect
+    runs-on: ubuntu-latest
+    steps:
+      - name: 'Checkout repository'
+        uses: actions/checkout@v4
+      - name: 'Set up Node.js'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+      - name: 'Download all worker artifacts'
+        uses: actions/download-artifact@v4
+        with:
+          path: ./raw-results
+      - name: 'Run combination script'
+        id: combine
+        run: node combine_results.js
+      
+      - name: 'Commit results to repository'
+        if: steps.combine.outputs.jobs_count > 0
+        run: |
+          git config --global user.name 'GitHub Actions Scraper'
+          git config --global user.email 'actions@github.com'
+          git add ${{ steps.combine.outputs.final_filename }}
+          git commit -m "📊 Dữ liệu TopCV: Thêm ${{ steps.combine.outputs.jobs_count }} tin mới vào ${{ steps.combine.outputs.final_filename }}"
+          git push
