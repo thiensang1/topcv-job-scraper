@@ -1,10 +1,10 @@
-// --- TRINH SÁT VIÊN - PHIÊN BẢN "THỐNG NHẤT" ---
-// Cập nhật: Sử dụng "Nguồn Chân lý Duy nhất" (url_builder.js) để tạo URL.
+// --- TRINH SÁT VIÊN - PHIÊN BẢN "KIÊN NHẪN" ---
+// Cập nhật: Chờ danh sách việc làm ổn định trước khi đọc thanh phân trang.
 
 const puppeteer = require('puppeteer-extra');
 const StealthPlugin = require('puppeteer-extra-plugin-stealth');
 const cheerio = require('cheerio');
-const { buildUrl } = require('./url_builder'); // <-- NHẬP KHẨU "SÁCH HƯỚNG DẪN"
+const { buildUrl } = require('./url_builder');
 
 puppeteer.use(StealthPlugin());
 
@@ -12,6 +12,8 @@ puppeteer.use(StealthPlugin());
 const TARGET_KEYWORD = "ke-toan"; 
 const BROWSER_TIMEOUT = 60000;
 const PAGE_LOAD_TIMEOUT = 45000;
+const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
 
 async function discoverTotalPages() {
     let browser;
@@ -49,20 +51,33 @@ async function discoverTotalPages() {
         const page = await browser.newPage();
         await page.setViewport({ width: 1920, height: 1080 });
 
-        // Sử dụng "Sách hướng dẫn" để tạo URL
         const targetUrl = buildUrl(TARGET_KEYWORD, 1);
         console.error(`[Trinh sát] Đang do thám địa hình tại: ${targetUrl}`);
         
         await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: PAGE_LOAD_TIMEOUT });
-
-        await page.waitForSelector('ul.pagination', { timeout: 30000 });
-        console.error("[Trinh sát] Đã phát hiện thanh phân trang.");
-
+        
+        // --- LOGIC MỚI: "KIÊN NHẪN" ---
+        // 1. Chờ đợi nội dung chính (danh sách việc làm) xuất hiện và ổn định
+        const jobListSelector = 'div.job-list-search-result';
+        console.error("[Trinh sát] Đang chờ nội dung chính ổn định...");
+        await page.waitForSelector(jobListSelector, { timeout: 30000 });
+        
+        // 2. Thêm một khoảnh khắc "nhìn" để JavaScript cuối cùng chạy
+        await sleep(3000); // Chờ 3 giây
+        console.error("[Trinh sát] Nội dung chính đã ổn định. Bắt đầu đọc thanh phân trang thực sự.");
+        
         const content = await page.content();
         const $ = cheerio.load(content);
 
+        // 3. Đọc thanh phân trang đã được hiển thị đầy đủ
+        const pagination = $('ul.pagination');
+        if (pagination.length === 0) {
+            console.error("[Trinh sát] Cảnh báo: Không tìm thấy thanh phân trang sau khi chờ. Mặc định là 1 trang.");
+            return 1;
+        }
+
         let lastPage = 1;
-        const lastPageLink = $('ul.pagination li:nth-last-child(2) a');
+        const lastPageLink = pagination.find('li:nth-last-child(2) a');
 
         if (lastPageLink.length > 0) {
             const pageText = lastPageLink.text().trim();
