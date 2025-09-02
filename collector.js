@@ -1,5 +1,5 @@
-// --- ĐẶC NHIỆM CHỚP NHOÁNG (COLLECTOR) ---
-// Cập nhật: Chỉ thu thập một trang duy nhất và rút lui.
+// --- ĐẶC NHIỆM CHỚP NHOÁNG (COLLECTOR) - PHIÊN BẢN "TỰ CHỦ" ---
+// Cập nhật: Chỉ thu thập một trang duy nhất và tin tưởng vào cơ chế tìm kiếm trình duyệt mặc định.
 
 const puppeteer = require('puppeteer-extra');
 const StealthPlugin = require('puppeteer-extra-plugin-stealth');
@@ -18,17 +18,13 @@ const PAGE_LOAD_TIMEOUT = 60000;
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 // --- HÀM THU THẬP DỮ LIỆU CHÍNH ---
-async function scrapeSinglePage(keyword, pageNum, workerId, proxy, chromePath) {
-    console.error(`--- [Đặc nhiệm ${workerId}] Bắt đầu nhiệm vụ chớp nhoáng: Thu thập '${keyword}', trang ${pageNum} ---`);
+async function scrapeSinglePage(keyword, pageNum, proxy) {
+    console.error(`--- [Đặc nhiệm ${pageNum}] Bắt đầu nhiệm vụ chớp nhoáng: Thu thập '${keyword}', trang ${pageNum} ---`);
     
     let browser;
     
     if (!proxy || !proxy.host || !proxy.port) {
-        console.error(`   -> [Đặc nhiệm ${workerId}] Lỗi nghiêm trọng: Không nhận được thông tin proxy. Dừng lại.`);
-        return [];
-    }
-    if (!chromePath) {
-        console.error(`   -> [Đặc nhiệm ${workerId}] Lỗi nghiêm trọng: Không nhận được 'Bản đồ Dẫn đường'. Dừng lại.`);
+        console.error(`   -> [Đặc nhiệm ${pageNum}] Lỗi nghiêm trọng: Không nhận được thông tin proxy. Dừng lại.`);
         return [];
     }
 
@@ -39,9 +35,9 @@ async function scrapeSinglePage(keyword, pageNum, workerId, proxy, chromePath) {
     ];
 
     try {
+        // Tin tưởng Puppeteer tự tìm trình duyệt đã được cài đặt bởi browser-actions
         browser = await puppeteer.launch({
             headless: true,
-            executablePath: chromePath,
             args: browserArgs,
             ignoreHTTPSErrors: true,
             timeout: BROWSER_TIMEOUT
@@ -50,7 +46,7 @@ async function scrapeSinglePage(keyword, pageNum, workerId, proxy, chromePath) {
         await page.setViewport({ width: 1920, height: 1080 });
 
         const targetUrl = buildUrl(keyword, pageNum);
-        console.error(`   -> [Đặc nhiệm ${workerId}] Đang tiếp cận mục tiêu: Trang ${pageNum}...`);
+        console.error(`   -> [Đặc nhiệm ${pageNum}] Đang tiếp cận mục tiêu: Trang ${pageNum}...`);
 
         await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: PAGE_LOAD_TIMEOUT });
 
@@ -74,7 +70,7 @@ async function scrapeSinglePage(keyword, pageNum, workerId, proxy, chromePath) {
         const jobListings = $('div[class*="job-item"]');
 
         if (jobListings.length === 0) {
-            console.error(`   -> [Đặc nhiệm ${workerId}] Không tìm thấy tin tuyển dụng nào trên trang ${pageNum}.`);
+            console.error(`   -> [Đặc nhiệm ${pageNum}] Không tìm thấy tin tuyển dụng nào trên trang ${pageNum}.`);
             return [];
         }
          
@@ -106,11 +102,11 @@ async function scrapeSinglePage(keyword, pageNum, workerId, proxy, chromePath) {
             });
         });
 
-        console.error(`   -> [Đặc nhiệm ${workerId}] Đã thu thập ${jobsOnPage.length} tin từ trang ${pageNum}. Rút lui.`);
+        console.error(`   -> [Đặc nhiệm ${pageNum}] Đã thu thập ${jobsOnPage.length} tin từ trang ${pageNum}. Rút lui.`);
         return jobsOnPage;
 
     } catch (error) {
-        console.error(`   -> [Đặc nhiệm ${workerId}] Nhiệm vụ thất bại tại trang ${pageNum}: ${error.message}`);
+        console.error(`   -> [Đặc nhiệm ${pageNum}] Nhiệm vụ thất bại tại trang ${pageNum}: ${error.message}`);
         return [];
     } finally {
         if (browser) {
@@ -124,14 +120,14 @@ async function scrapeSinglePage(keyword, pageNum, workerId, proxy, chromePath) {
     // Cập nhật: Chỉ nhận vào 1 trang duy nhất, workerId giờ chính là số trang
     const args = process.argv.slice(2);
     if (args.length !== 5) {
-        console.error("Cách dùng: node collector.js [keyword] [pageNum] [proxyHost] [proxyPort] [chromePath]");
+        console.error("Cách dùng: node collector.js [keyword] [pageNum] [proxyHost] [proxyPort]");
         process.exit(1);
     }
-    const [keyword, pageNumStr, proxyHost, proxyPort, chromePath] = args;
+    const [keyword, pageNumStr, proxyHost, proxyPort] = args;
     const pageNum = parseInt(pageNumStr, 10);
     const proxy = { host: proxyHost, port: proxyPort };
 
-    const results = await scrapeSinglePage(keyword, pageNum, pageNum, proxy, chromePath);
+    const results = await scrapeSinglePage(keyword, pageNum, proxy);
 
     if (results.length > 0) {
         // Tên file giờ đây được đặt theo số trang để tránh trùng lặp
