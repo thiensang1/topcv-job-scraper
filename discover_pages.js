@@ -1,5 +1,5 @@
-// --- TRINH SÁT VIÊN - PHIÊN BẢN "KIÊN NHẪN" ---
-// Cập nhật: Chờ danh sách việc làm ổn định trước khi đọc thanh phân trang.
+// --- TRINH SÁT VIÊN - PHIÊN BẢN "ĐỌC HIỆU" ---
+// Cập nhật: Đọc trực tiếp tổng số trang từ tiêu đề kết quả tìm kiếm.
 
 const puppeteer = require('puppeteer-extra');
 const StealthPlugin = require('puppeteer-extra-plugin-stealth');
@@ -12,8 +12,6 @@ puppeteer.use(StealthPlugin());
 const TARGET_KEYWORD = "ke-toan"; 
 const BROWSER_TIMEOUT = 60000;
 const PAGE_LOAD_TIMEOUT = 45000;
-const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
-
 
 async function discoverTotalPages() {
     let browser;
@@ -56,35 +54,30 @@ async function discoverTotalPages() {
         
         await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: PAGE_LOAD_TIMEOUT });
         
-        // --- LOGIC MỚI: "KIÊN NHẪN" ---
-        // 1. Chờ đợi nội dung chính (danh sách việc làm) xuất hiện và ổn định
-        const jobListSelector = 'div.job-list-search-result';
-        console.error("[Trinh sát] Đang chờ nội dung chính ổn định...");
-        await page.waitForSelector(jobListSelector, { timeout: 30000 });
-        
-        // 2. Thêm một khoảnh khắc "nhìn" để JavaScript cuối cùng chạy
-        await sleep(3000); // Chờ 3 giây
-        console.error("[Trinh sát] Nội dung chính đã ổn định. Bắt đầu đọc thanh phân trang thực sự.");
-        
+        // --- LOGIC MỚI: "ĐỌC HIỆU" ---
+        // 1. Chờ đợi "tấm biển" chứa thông tin tổng số trang xuất hiện.
+        const headerSelector = 'div.search-result-header h1';
+        console.error("[Trinh sát] Đang chờ 'tấm biển' thông báo kết quả...");
+        await page.waitForSelector(headerSelector, { timeout: 30000 });
+        console.error("[Trinh sát] Đã phát hiện 'tấm biển'. Bắt đầu đọc.");
+
         const content = await page.content();
         const $ = cheerio.load(content);
 
-        // 3. Đọc thanh phân trang đã được hiển thị đầy đủ
-        const pagination = $('ul.pagination');
-        if (pagination.length === 0) {
-            console.error("[Trinh sát] Cảnh báo: Không tìm thấy thanh phân trang sau khi chờ. Mặc định là 1 trang.");
-            return 1;
-        }
-
+        // 2. Đọc nội dung của "tấm biển"
+        const headerText = $(headerSelector).text(); // Ví dụ: "Tìm thấy 2115 việc làm Kế Toán / 93 trang"
+        
         let lastPage = 1;
-        const lastPageLink = pagination.find('li:nth-last-child(2) a');
-
-        if (lastPageLink.length > 0) {
-            const pageText = lastPageLink.text().trim();
-            const pageNumber = parseInt(pageText, 10);
+        // 3. Sử dụng biểu thức chính quy (regex) để tách ra con số cuối cùng
+        const match = headerText.match(/\/ \s*(\d+)\s* trang/);
+        
+        if (match && match[1]) {
+            const pageNumber = parseInt(match[1], 10);
             if (!isNaN(pageNumber)) {
                 lastPage = pageNumber;
             }
+        } else {
+             console.error("[Trinh sát] Cảnh báo: Không thể đọc số trang từ tiêu đề. Mặc định là 1 trang.");
         }
         
         console.error(`[Trinh sát] Báo cáo: Phát hiện có tổng cộng ${lastPage} trang.`);
