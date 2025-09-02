@@ -1,5 +1,6 @@
-// --- TRINH SÁT VIÊN - PHIÊN BẢN "ĐIỀU TRA CÓ TUẦN TỰ" (Tối thượng) ---
-// Cập nhật: Chờ nội dung chính ổn định trước, sau đó mới đọc tiêu đề kết quả.
+// --- TRINH SÁT VIÊN - PHIÊN BẢN "ĐỌC HIỆU" ---
+// Cập nhật: Đọc trực tiếp tổng số trang từ tiêu đề kết quả tìm kiếm,
+// dựa trên "manh mối vàng" <span class="hight-light">.
 
 const puppeteer = require('puppeteer-extra');
 const StealthPlugin = require('puppeteer-extra-plugin-stealth');
@@ -12,7 +13,6 @@ puppeteer.use(StealthPlugin());
 const TARGET_KEYWORD = "ke-toan"; 
 const BROWSER_TIMEOUT = 60000;
 const PAGE_LOAD_TIMEOUT = 45000;
-const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 async function discoverTotalPages() {
     let browser;
@@ -55,27 +55,21 @@ async function discoverTotalPages() {
         
         await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: PAGE_LOAD_TIMEOUT });
         
-        // --- LOGIC "ĐIỀU TRA CÓ TUẦN TỰ" ---
-        // 1. Chờ "Nhân chứng Chính" (danh sách việc làm) xuất hiện trước.
-        const jobListSelector = 'div.job-list-search-result';
-        console.error("[Trinh sát] Đang chờ 'nhân chứng chính' (danh sách việc làm)...");
-        await page.waitForSelector(jobListSelector, { timeout: 30000 });
-        console.error("[Trinh sát] 'Nhân chứng chính' đã có mặt.");
-        
-        // 2. Thêm một khoảnh khắc "Quan sát" để đảm bảo "nhân chứng phụ" cũng đã ổn định.
-        await sleep(3000); // Chờ 3 giây
+        // --- LOGIC MỚI: "ĐỌC HIỆU" ---
+        // 1. Chờ đợi "manh mối vàng" chứa thông tin tổng số trang xuất hiện.
+        const headerSelector = 'div.search-result-header h1 span.hight-light';
+        console.error("[Trinh sát] Đang chờ 'manh mối vàng' (span.hight-light)...");
+        await page.waitForSelector(headerSelector, { timeout: 30000 });
+        console.error("[Trinh sát] Đã phát hiện 'manh mối'. Bắt đầu đọc.");
 
-        // 3. Bây giờ mới "thẩm vấn" "Nhân chứng Tấm biển".
-        const headerSelector = 'div.search-result-header h1';
-        console.error("[Trinh sát] Đang đọc 'tấm biển' thông báo kết quả...");
-        
         const content = await page.content();
         const $ = cheerio.load(content);
 
-        const headerText = $(headerSelector).text();
+        // 2. Đọc nội dung của toàn bộ dòng tiêu đề chứa "manh mối"
+        const headerText = $('div.search-result-header h1').text(); // Ví dụ: "Tìm thấy 2115 việc làm Kế Toán / 93 trang"
         
         let lastPage = 1;
-        // Sử dụng biểu thức chính quy (regex) để tách ra con số cuối cùng
+        // 3. Sử dụng biểu thức chính quy (regex) để tách ra con số cuối cùng
         const match = headerText.match(/\/ \s*(\d+)\s* trang/);
         
         if (match && match[1]) {
