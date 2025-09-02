@@ -1,16 +1,16 @@
-// --- CÔNG NHÂN KHAI THÁC - PHIÊN BẢN "BÁO CÁO SẠCH" ---
-// Cập nhật: Chuyển toàn bộ nhật ký sang stderr để không làm nhiễu output.
+// --- CÔNG NHÂN KHAI THÁC - PHIÊN BẢN "THỐNG NHẤT" ---
+// Cập nhật: Sử dụng "Nguồn Chân lý Duy nhất" (url_builder.js) để tạo URL.
 
 const puppeteer = require('puppeteer-extra');
 const StealthPlugin = require('puppeteer-extra-plugin-stealth');
 const cheerio = require('cheerio');
 const fs = require('fs');
 const { stringify } = require('csv-stringify/sync');
+const { buildUrl } = require('./url_builder'); // <-- NHẬP KHẨU "SÁCH HƯỚNG DẪN"
 
 puppeteer.use(StealthPlugin());
 
 // --- CẤU HÌNH ---
-const BASE_URL = "https://www.topcv.vn";
 const BROWSER_TIMEOUT = 90000;
 const PAGE_LOAD_TIMEOUT = 60000;
 
@@ -20,7 +20,6 @@ const randomDelay = (min, max) => Math.random() * (max - min) + min;
 
 // --- HÀM THU THẬP DỮ LIỆU CHÍNH ---
 async function scrapeTopCV(keyword, startPage, endPage, workerId, proxy, chromePath) {
-    // Luồng phụ: Ghi nhật ký vào stderr
     console.error(`--- [Worker ${workerId}] Bắt đầu nhiệm vụ: Thu thập '${keyword}' từ trang ${startPage} đến ${endPage} ---`);
     
     let browser, page;
@@ -55,7 +54,8 @@ async function scrapeTopCV(keyword, startPage, endPage, workerId, proxy, chromeP
         let allJobsForWorker = [];
 
         for (let i = startPage; i <= endPage; i++) {
-            const targetUrl = `https://www.topcv.vn/tim-viec-lam-${keyword}-cr392cb393?type_keyword=1&page=${i}&category_family=r392~b393`;
+            // Sử dụng "Sách hướng dẫn" để tạo URL
+            const targetUrl = buildUrl(keyword, i);
             console.error(`   -> [Worker ${workerId}] Đang truy cập trang ${i} với danh tính ${proxy.host}...`);
 
             try {
@@ -105,7 +105,7 @@ async function scrapeTopCV(keyword, startPage, endPage, workerId, proxy, chromeP
                     allJobsForWorker.push({
                         'keyword': keyword,
                         'title': titleTag.text().trim() || null,
-                        'link': titleTag.attr('href') ? `${BASE_URL}${titleTag.attr('href')}` : null,
+                        'link': titleTag.attr('href') ? `https://www.topcv.vn${titleTag.attr('href')}` : null,
                         'company': companyText,
                         'salary': salaryTag.text().trim() || 'Thỏa thuận',
                         'Nơi làm việc': locationTag.text().trim() || null,
@@ -141,6 +141,7 @@ async function scrapeTopCV(keyword, startPage, endPage, workerId, proxy, chromeP
     }
 }
 
+// --- HÀM MAIN ĐỂ CHẠY TỪ DÒNG LỆNH ---
 (async () => {
     const args = process.argv.slice(2);
     if (args.length !== 7) {

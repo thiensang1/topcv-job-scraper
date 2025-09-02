@@ -1,9 +1,10 @@
-// --- TRINH SÁT VIÊN - PHIÊN BẢN "BÁO CÁO SẠCH" ---
-// Cập nhật: Chuyển toàn bộ nhật ký sang stderr để không làm nhiễu output.
+// --- TRINH SÁT VIÊN - PHIÊN BẢN "THỐNG NHẤT" ---
+// Cập nhật: Sử dụng "Nguồn Chân lý Duy nhất" (url_builder.js) để tạo URL.
 
 const puppeteer = require('puppeteer-extra');
 const StealthPlugin = require('puppeteer-extra-plugin-stealth');
 const cheerio = require('cheerio');
+const { buildUrl } = require('./url_builder'); // <-- NHẬP KHẨU "SÁCH HƯỚNG DẪN"
 
 puppeteer.use(StealthPlugin());
 
@@ -14,13 +15,11 @@ const PAGE_LOAD_TIMEOUT = 45000;
 
 async function discoverTotalPages() {
     let browser;
-    // Đọc thông tin proxy và "bản đồ" từ "bộ não" điều phối
     const PROXY_HOST = process.env.PROXY_HOST;
     const PROXY_PORT = process.env.PROXY_PORT;
     const CHROME_EXECUTABLE_PATH = process.env.CHROME_PATH;
 
     if (!PROXY_HOST || !PROXY_PORT) {
-        // Luồng phụ: Ghi nhật ký lỗi vào stderr
         console.error("Lỗi nghiêm trọng: Trinh sát viên không được trang bị proxy. Dừng lại.");
         return 1;
     }
@@ -38,7 +37,6 @@ async function discoverTotalPages() {
 
     try {
         console.error(`[Trinh sát] Đang khởi tạo trình duyệt với danh tính ${PROXY_HOST}...`);
-        console.error(`[Trinh sát] Sử dụng "chiếc xe" tại: ${CHROME_EXECUTABLE_PATH}`);
         
         browser = await puppeteer.launch({
             headless: true,
@@ -51,8 +49,9 @@ async function discoverTotalPages() {
         const page = await browser.newPage();
         await page.setViewport({ width: 1920, height: 1080 });
 
-        const targetUrl = `https://www.topcv.vn/tim-viec-lam-${TARGET_KEYWORD}-cr392cb393?type_keyword=1&page=1&category_family=r392~b393`;
-        console.error("[Trinh sát] Đang do thám địa hình tại trang 1...");
+        // Sử dụng "Sách hướng dẫn" để tạo URL
+        const targetUrl = buildUrl(TARGET_KEYWORD, 1);
+        console.error(`[Trinh sát] Đang do thám địa hình tại: ${targetUrl}`);
         
         await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: PAGE_LOAD_TIMEOUT });
 
@@ -89,7 +88,6 @@ async function discoverTotalPages() {
 
 // Chạy hàm và chỉ in kết quả cuối cùng ra stdout
 discoverTotalPages().then(count => {
-    // Luồng chính thức: Chỉ ghi kết quả cuối cùng ra stdout để GitHub Actions đọc
     process.stdout.write(count.toString());
 });
 
