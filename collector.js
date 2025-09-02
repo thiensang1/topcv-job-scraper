@@ -1,4 +1,4 @@
-// --- CÔNG NHÂN KHAI THÁC - PHIÊN BẢN "TIN TƯỞNG" ---
+// --- CÔNG NHÂN KHAI THÁC - PHIÊN BẢN "TỰ CHỦ" / "TIN TƯỞNG" ---
 // Cập nhật: Tin tưởng vào cơ chế tìm kiếm trình duyệt mặc định của Puppeteer.
 
 const puppeteer = require('puppeteer-extra');
@@ -160,4 +160,5 @@ async function scrapeTopCV(keyword, startPage, endPage, workerId, proxy) {
         console.error(`[Worker ${workerId}] Không thu thập được dữ liệu nào.`);
     }
 })();
+
 
