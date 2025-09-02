@@ -14,10 +14,10 @@ const BASE_URL = "https://www.topcv.vn";
 function buildUrl(keyword, page) {
     // Logic tạo URL đã được kiểm chứng, giờ đây được tập trung tại một nơi duy nhất.
     if (keyword === 'ke-toan') {
-        return `${BASE_URL}/tim-viec-lam-ke-toan-cr392cb393?type_keyword=1&page=${page}&category_family=r392~b393`;
+        return ${BASE_URL}/tim-viec-lam-ke-toan-cr392cb393?type_keyword=1&page=${page}&category_family=r392~b393;
     } else {
         // Cấu trúc URL mặc định cho các từ khóa khác
-        return `${BASE_URL}/tim-viec-lam-${keyword}?type_keyword=1&page=${page}&sba=1`;
+        return ${BASE_URL}/tim-viec-lam-${keyword}?type_keyword=1&page=${page}&sba=1;
     }
 }
 

@@ -20,6 +20,7 @@ const randomDelay = (min, max) => Math.random() * (max - min) + min;
 
 // --- HÀM THU THẬP DỮ LIỆU CHÍNH ---
 async function scrapeTopCV(keyword, startPage, endPage, workerId, proxy, chromePath) {
+    // Chuyển toàn bộ nhật ký sang stderr
     console.error(`--- [Worker ${workerId}] Bắt đầu nhiệm vụ: Thu thập '${keyword}' từ trang ${startPage} đến ${endPage} ---`);
     
     let browser, page;
