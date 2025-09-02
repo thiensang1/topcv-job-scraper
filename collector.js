@@ -1,12 +1,12 @@
-// --- CÔNG NHÂN KHAI THÁC - PHIÊN BẢN "THỐNG NHẤT" ---
-// Cập nhật: Sử dụng "Nguồn Chân lý Duy nhất" (url_builder.js) để tạo URL.
+// --- CÔNG NHÂN KHAI THÁC - PHIÊN BẢN "TIN TƯỞNG" ---
+// Cập nhật: Tin tưởng vào cơ chế tìm kiếm trình duyệt mặc định của Puppeteer.
 
 const puppeteer = require('puppeteer-extra');
 const StealthPlugin = require('puppeteer-extra-plugin-stealth');
 const cheerio = require('cheerio');
 const fs = require('fs');
 const { stringify } = require('csv-stringify/sync');
-const { buildUrl } = require('./url_builder'); // <-- NHẬP KHẨU "SÁCH HƯỚNG DẪN"
+const { buildUrl } = require('./url_builder');
 
 puppeteer.use(StealthPlugin());
 
@@ -19,7 +19,7 @@ const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 const randomDelay = (min, max) => Math.random() * (max - min) + min;
 
 // --- HÀM THU THẬP DỮ LIỆU CHÍNH ---
-async function scrapeTopCV(keyword, startPage, endPage, workerId, proxy, chromePath) {
+async function scrapeTopCV(keyword, startPage, endPage, workerId, proxy) {
     // Chuyển toàn bộ nhật ký sang stderr
     console.error(`--- [Worker ${workerId}] Bắt đầu nhiệm vụ: Thu thập '${keyword}' từ trang ${startPage} đến ${endPage} ---`);
     
@@ -27,10 +27,6 @@ async function scrapeTopCV(keyword, startPage, endPage, workerId, proxy, chromeP
     
     if (!proxy || !proxy.host || !proxy.port) {
         console.error(`   -> [Worker ${workerId}] Lỗi nghiêm trọng: Không nhận được thông tin proxy. Dừng lại.`);
-        return [];
-    }
-    if (!chromePath) {
-        console.error(`   -> [Worker ${workerId}] Lỗi nghiêm trọng: Không nhận được 'Bản đồ Dẫn đường'. Dừng lại.`);
         return [];
     }
 
@@ -41,10 +37,9 @@ async function scrapeTopCV(keyword, startPage, endPage, workerId, proxy, chromeP
     ];
 
     try {
-        console.error(`   -> [Worker ${workerId}] Sử dụng "chiếc xe" tại: ${chromePath}`);
+        // Tin tưởng Puppeteer tự tìm trình duyệt đã được cài đặt bởi browser-actions
         browser = await puppeteer.launch({
             headless: true,
-            executablePath: chromePath,
             args: browserArgs,
             ignoreHTTPSErrors: true,
             timeout: BROWSER_TIMEOUT
@@ -55,7 +50,6 @@ async function scrapeTopCV(keyword, startPage, endPage, workerId, proxy, chromeP
         let allJobsForWorker = [];
 
         for (let i = startPage; i <= endPage; i++) {
-            // Sử dụng "Sách hướng dẫn" để tạo URL
             const targetUrl = buildUrl(keyword, i);
             console.error(`   -> [Worker ${workerId}] Đang truy cập trang ${i} với danh tính ${proxy.host}...`);
 
@@ -144,17 +138,18 @@ async function scrapeTopCV(keyword, startPage, endPage, workerId, proxy, chromeP
 
 // --- HÀM MAIN ĐỂ CHẠY TỪ DÒNG LỆNH ---
 (async () => {
+    // Cập nhật: không còn nhận chromePath nữa
     const args = process.argv.slice(2);
-    if (args.length !== 7) {
-        console.error("Cách dùng: node collector.js [keyword] [startPage] [endPage] [workerId] [proxyHost] [proxyPort] [chromePath]");
+    if (args.length !== 6) {
+        console.error("Cách dùng: node collector.js [keyword] [startPage] [endPage] [workerId] [proxyHost] [proxyPort]");
         process.exit(1);
     }
-    const [keyword, startPageStr, endPageStr, workerId, proxyHost, proxyPort, chromePath] = args;
+    const [keyword, startPageStr, endPageStr, workerId, proxyHost, proxyPort] = args;
     const startPage = parseInt(startPageStr, 10);
     const endPage = parseInt(endPageStr, 10);
     const proxy = { host: proxyHost, port: proxyPort };
 
-    const results = await scrapeTopCV(keyword, startPage, endPage, workerId, proxy, chromePath);
+    const results = await scrapeTopCV(keyword, startPage, endPage, workerId, proxy);
 
     if (results.length > 0) {
         const outputFilename = `results_worker_${workerId}.csv`;
