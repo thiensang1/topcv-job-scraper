@@ -1,5 +1,5 @@
-# --- QUY TRÌNH TỰ ĐỘNG HÓA CUỐI CÙNG - PHIÊN BẢN "TỰ CHỦ" ---
-# Cập nhật: Đảm bảo mỗi job (discover, collect) là tự chủ và cài đặt trình duyệt của riêng mình.
+# --- QUY TRÌNH TỰ ĐỘNG HÓA CUỐI CÙNG - PHIÊN BẢN "TỐI THƯỢNG" ---
+# Kết hợp logic "Thám tử", kiến trúc "Tự chủ", và chiến thuật "Chớp nhoáng".
 
 name: 'TopCV Daily Scraper'
 
@@ -78,6 +78,7 @@ jobs:
         id: set-matrix
         run: |
           totalPages=${{ needs.discover.outputs.totalPages }}
+          # Tạo một chuỗi các số từ 1 đến totalPages, cách nhau bằng dấu phẩy
           pages=$(seq -s, 1 $totalPages)
           echo "matrix={\"page\":[${pages}]}" >> $GITHUB_OUTPUT
 
@@ -87,6 +88,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
+      # "Bộ não" đọc "kế hoạch tác chiến" và triển khai một "đặc nhiệm" cho mỗi trang
       matrix: ${{ fromJson(needs.generate-matrix.outputs.matrix) }}
     steps:
       - name: 'Checkout repository'
@@ -108,6 +110,7 @@ jobs:
           PROXY_PORT=${{ needs.get-proxy-quartermaster.outputs.proxy_port }}
           PAGE_NUM=${{ matrix.page }}
           
+          # Mỗi "đặc nhiệm" chỉ chạy cho 1 trang duy nhất
           node collector.js "ke-toan" $PAGE_NUM $PROXY_HOST $PROXY_PORT
       
       - name: 'Upload page artifact'
