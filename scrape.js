@@ -202,8 +202,9 @@ async function loneWolfScraper() {
     }
     
     // Gửi output cho GitHub Actions
-    fs.appendFileSync(process.env.GITHUB_OUTPUT, `jobs_count=${jobsCount}\n`);
-    fs.appendFileSync(process.env.GITHUB_OUTPUT, `final_filename=${finalFilename}\n`);
+    // Cú pháp mới và an toàn hơn để set output
+    const output = `jobs_count=${jobsCount}\nfinal_filename=${finalFilename}\n`;
+    fs.appendFileSync(process.env.GITHUB_OUTPUT, output);
 }
 
 // Bắt đầu chiến dịch
