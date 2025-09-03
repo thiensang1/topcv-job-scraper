@@ -1,5 +1,6 @@
 // --- TRINH SÁT VIÊN - PHIÊN BẢN "THÁM TỬ DÀY DẠN" ---
 // Cập nhật: Bỏ qua "hiện trường giả" (trang trống) và chỉ tin vào URL verification.
+// Đồng thời tuân thủ kiến trúc "Tự chủ".
 
 const puppeteer = require('puppeteer-extra');
 const StealthPlugin = require('puppeteer-extra-plugin-stealth');
@@ -17,18 +18,12 @@ async function discoverTotalPages() {
     let browser;
     const PROXY_HOST = process.env.PROXY_HOST;
     const PROXY_PORT = process.env.PROXY_PORT;
-    const CHROME_EXECUTABLE_PATH = process.env.CHROME_PATH;
 
     if (!PROXY_HOST || !PROXY_PORT) {
         console.error("Lỗi nghiêm trọng: Trinh sát viên không được trang bị proxy. Dừng lại.");
         return 1;
     }
     
-    if (!CHROME_EXECUTABLE_PATH) {
-        console.error("Lỗi nghiêm trọng: Trinh sát viên không nhận được 'Bản đồ Dẫn đường' (CHROME_PATH). Dừng lại.");
-        return 1;
-    }
-
     const browserArgs = [
         '--no-sandbox',
         '--disable-setuid-sandbox',
@@ -38,9 +33,9 @@ async function discoverTotalPages() {
     try {
         console.error(`[Thám tử] Đang khởi tạo trình duyệt với danh tính ${PROXY_HOST}...`);
         
+        // KIẾN TRÚC "TỰ CHỦ": Tin tưởng Puppeteer tự tìm trình duyệt
         browser = await puppeteer.launch({
             headless: true,
-            executablePath: CHROME_EXECUTABLE_PATH,
             args: browserArgs,
             ignoreHTTPSErrors: true,
             timeout: BROWSER_TIMEOUT
@@ -53,6 +48,7 @@ async function discoverTotalPages() {
 
         console.error("[Thám tử] Bắt đầu hành trình tìm kiếm 'rìa thế giới'...");
 
+        // LOGIC "THÁM TỬ DÀY DẠN"
         for (let i = 1; i <= MAX_PAGES_TO_CHECK; i++) {
             const targetUrl = buildUrl(TARGET_KEYWORD, i);
             console.error(`   -> Đang thám hiểm trang ${i}...`);
@@ -74,9 +70,6 @@ async function discoverTotalPages() {
                 
                 // Nếu hành trình thành công, cập nhật lại vị trí đã biết
                 lastKnownGoodPage = i;
-                
-                // --- SỬA LỖI QUAN TRỌNG: Bỏ qua việc kiểm tra nội dung trang ---
-                // Chúng ta không còn tin vào "bằng chứng" này nữa vì nó có thể là một cái bẫy.
 
             } catch (error) {
                  console.error(`   -> Gặp lỗi khi thám hiểm trang ${i}: ${error.message}. Coi như đã đến trang cuối.`);
