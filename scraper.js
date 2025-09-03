@@ -177,7 +177,7 @@ async function loneWolfScraper() {
                 console.error(`   -> Đã thu thập ${jobListings.length} tin từ trang ${i}.`);
                 
                 // --- LOGIC MỚI: "NHỊP ĐIỆU CON NGƯỜI" (Nghỉ ngơi giữa các chặng) ---
-                const betweenPagesDelay = randomDelay(3000, 7000);
+                const betweenPagesDelay = randomDelay(10000, 17000);
                 console.error(`   -> Tạm nghỉ ${(betweenPagesDelay / 1000).toFixed(2)} giây trước khi sang trang tiếp theo...`);
                 await sleep(betweenPagesDelay);
 
