@@ -1,47 +1,46 @@
-# --- QUY TRÌNH TỰ ĐỘNG HÓA CUỐI CÙNG - PHIÊN BẢN "ĐIỆP VIÊN ĐƠN ĐỘC" ---
-# Cập nhật: Tái cấu trúc toàn bộ thành một quy trình duy nhất, tuần tự.
-
+--- QUY TRÌNH TỰ ĐỘNG HÓA CUỐI CÙNG - PHIÊN BẢN "ĐIỆP VIÊN ĐƠN ĐỘC" ---
+Cập nhật: Tái cấu trúc toàn bộ thành một quy trình duy nhất, tuần tự.
 name: 'TopCV Daily Scraper'
 
 on:
-  schedule:
-    - cron: '0 0 * * *' # Nửa đêm giờ UTC (7h sáng giờ VN)
-  workflow_dispatch:
+schedule:
+- cron: '0 0 * * *' # Nửa đêm giờ UTC (7h sáng giờ VN)
+workflow_dispatch:
 
 jobs:
-  # --- MỘT JOB DUY NHẤT ĐỂ THỰC HIỆN TOÀN BỘ "CHIẾN DỊCH" ---
-  scrape-and-commit:
-    runs-on: ubuntu-latest
-    
-    steps:
-      # --- GIAI ĐOẠN 1: CHUẨN BỊ "CĂN CỨ" ---
-      - name: 'Checkout repository'
-        uses: actions/checkout@v4
-      - name: 'Set up Node.js'
-        uses: actions/setup-node@v4
-        with:
-          node-version: '18'
-          cache: 'npm'
-      - name: 'Setup Chrome browser'
-        uses: browser-actions/setup-chrome@latest
-      - name: 'Install all project dependencies'
-        run: npm install
 
-      # --- GIAI ĐOẠN 2: TRIỂN KHAI "ĐIỆP VIÊN" ---
-      - name: 'Run Lone Wolf Scraper'
-        id: run_scraper # Đặt ID để lấy output
-        env:
-          PROXY_API_ENDPOINT: ${{ secrets.PROXY_API_ENDPOINT }}
-          PROXY_API_KEY: ${{ secrets.PROXY_API_KEY }}
-        run: node scraper.js
-      
-      # --- GIAI ĐOẠN 3: TỔNG HỢP VÀ LƯU TRỮ ---
-      - name: 'Commit results to repository'
-        # Chỉ commit nếu "Điệp viên" báo cáo đã thu thập được dữ liệu
-        if: steps.run_scraper.outputs.jobs_count > 0
-        run: |
-          git config --global user.name 'GitHub Actions Scraper'
-          git config --global user.email 'actions@github.com'
-          git add ${{ steps.run_scraper.outputs.final_filename }}
-          git commit -m "📊 Dữ liệu TopCV: Thêm ${{ steps.run_scraper.outputs.jobs_count }} tin mới vào ${{ steps.run_scraper.outputs.final_filename }}"
-          git push
+--- MỘT JOB DUY NHẤT ĐỂ THỰC HIỆN TOÀN BỘ "CHIẾN DỊCH" ---
+scrape-and-commit:
+runs-on: ubuntu-latest
+
+steps:
+  # --- GIAI ĐOẠN 1: CHUẨN BỊ "CĂN CỨ" ---
+  - name: 'Checkout repository'
+    uses: actions/checkout@v4
+  - name: 'Set up Node.js'
+    uses: actions/setup-node@v4
+    with:
+      node-version: '18'
+      cache: 'npm'
+  - name: 'Setup Chrome browser'
+    uses: browser-actions/setup-chrome@latest
+  - name: 'Install all project dependencies'
+    run: npm install
+
+  # --- GIAI ĐOẠN 2: TRIỂN KHAI "ĐIỆP VIÊN" ---
+  - name: 'Run Lone Wolf Scraper'
+    id: run_scraper # Đặt ID để lấy output
+    env:
+      PROXY_API_ENDPOINT: ${{ secrets.PROXY_API_ENDPOINT }}
+      PROXY_API_KEY: ${{ secrets.PROXY_API_KEY }}
+    run: node scraper.js
+  
+  # --- GIAI ĐOẠN 3: TỔNG HỢP VÀ LƯU TRỮ ---
+  - name: 'Commit results to repository'
+    # Chỉ commit nếu "Điệp viên" báo cáo đã thu thập được dữ liệu
+    if: steps.run_scraper.outputs.jobs_count > 0
+    run: |
+      git config --global user.name 'GitHub Actions Scraper'
+      git config --global user.email 'actions@github.com'
+      git add ${{ steps.run_scraper.outputs.final_filename }}
+      git commit -m "📊 Dữ liệu TopCV: Thêm ${{ steps.run_scraper.outputs.jobs_count }} tin mới vào ${{ steps.run_
