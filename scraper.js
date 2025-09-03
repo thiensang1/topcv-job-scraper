@@ -1,5 +1,5 @@
-// --- ĐIỆP VIÊN ĐƠN ĐỘC (SCRAPER) - PHIÊN BẢN "BẢN ĐỒ" ---
-// Cập nhật: Hợp nhất toàn bộ logic và nhận đường dẫn trình duyệt một cách tường minh.
+// --- ĐIỆP VIÊN ĐƠN ĐỘC (SCRAPER) - PHIÊN BẢN "NHỊP ĐIỆU" ---
+// Cập nhật: Thêm các khoảng nghỉ chiến lược để mô phỏng hành vi của con người.
 
 const puppeteer = require('puppeteer-extra');
 const StealthPlugin = require('puppeteer-extra-plugin-stealth');
@@ -92,7 +92,6 @@ async function loneWolfScraper() {
     let finalFilename = "";
 
     try {
-        // Nhận "Bản đồ" từ "bộ não"
         const CHROME_EXECUTABLE_PATH = process.env.CHROME_PATH;
         if (!CHROME_EXECUTABLE_PATH) {
             throw new Error("Nhiệm vụ thất bại: Không nhận được 'Bản đồ Dẫn đường' (CHROME_PATH).");
@@ -108,11 +107,10 @@ async function loneWolfScraper() {
         ];
 
         console.error(`[Điệp viên] Đang khởi tạo trình duyệt với danh tính ${proxy.host}...`);
-        console.error(`[Điệp viên] Sử dụng "chiếc xe" tại: ${CHROME_EXECUTABLE_PATH}`);
         
         browser = await puppeteer.launch({
             headless: true,
-            executablePath: CHROME_EXECUTABLE_PATH, // <-- SỬ DỤNG "BẢN ĐỒ"
+            executablePath: CHROME_EXECUTABLE_PATH,
             args: browserArgs,
             ignoreHTTPSErrors: true,
             timeout: BROWSER_TIMEOUT
@@ -122,6 +120,11 @@ async function loneWolfScraper() {
         await page.setViewport({ width: 1920, height: 1080 });
 
         const totalPages = await discoverTotalPages(page);
+
+        // --- LOGIC MỚI: "NHỊP ĐIỆU CON NGƯỜI" (Hít thở sâu) ---
+        const initialDelay = randomDelay(5000, 10000);
+        console.error(`\n[Điệp viên] Do thám hoàn tất. Tạm nghỉ ${(initialDelay / 1000).toFixed(2)} giây để phân tích tình hình...`);
+        await sleep(initialDelay);
 
         console.error("\n--- [Điệp viên] Bắt đầu giai đoạn KHAI THÁC ---");
         for (let i = 1; i <= totalPages; i++) {
@@ -172,7 +175,12 @@ async function loneWolfScraper() {
                 });
 
                 console.error(`   -> Đã thu thập ${jobListings.length} tin từ trang ${i}.`);
-                await sleep(randomDelay(2000, 4000));
+                
+                // --- LOGIC MỚI: "NHỊP ĐIỆU CON NGƯỜI" (Nghỉ ngơi giữa các chặng) ---
+                const betweenPagesDelay = randomDelay(3000, 7000);
+                console.error(`   -> Tạm nghỉ ${(betweenPagesDelay / 1000).toFixed(2)} giây trước khi sang trang tiếp theo...`);
+                await sleep(betweenPagesDelay);
+
 
             } catch (error) {
                 console.error(`   -> Lỗi khi xử lý trang ${i}: ${error.message}. Chuyển sang trang tiếp theo.`);
