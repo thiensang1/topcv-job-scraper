@@ -7,7 +7,6 @@ const cheerio = require('cheerio');
 const fs = require('fs');
 const { stringify } = require('csv-stringify/sync');
 const axios = require('axios');
-const { buildUrl } = require('./url_builder');
 
 puppeteer.use(StealthPlugin());
 
@@ -20,6 +19,16 @@ const MAX_PAGES_TO_CHECK = 200;
 // --- HÀM TIỆN ÍCH ---
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 const randomDelay = (min, max) => Math.random() * (max - min) + min;
+
+// --- HÀM XÂY DỰNG URL (Nguồn Chân lý Duy nhất) ---
+function buildUrl(keyword, page) {
+    const BASE_URL = "https://www.topcv.vn";
+    if (keyword === 'ke-toan') {
+        return `${BASE_URL}/tim-viec-lam-ke-toan-cr392cb393?type_keyword=1&page=${page}&category_family=r392~b393`;
+    } else {
+        return `${BASE_URL}/tim-viec-lam-${keyword}?type_keyword=1&page=${page}&sba=1`;
+    }
+}
 
 // --- HÀM LẤY PROXY ---
 async function getProxy(apiKey, apiEndpoint) {
@@ -41,23 +50,50 @@ async function getProxy(apiKey, apiEndpoint) {
         throw new Error(`Phản hồi không như mong đợi: ${JSON.stringify(response.data)}`);
     } catch (error) {
         console.error(`-> Lỗi nghiêm trọng khi yêu cầu proxy mới: ${error.message}`);
-        return null;
+        throw error; // Ném lỗi ra ngoài để quy trình chính có thể xử lý
     }
 }
 
+// --- HÀM DO THÁM (Logic 'Thám tử Dày dạn') ---
+async function discoverTotalPages(page) {
+    let lastKnownGoodPage = 1;
+    console.error("[Điệp viên] Bắt đầu giai đoạn DO THÁM...");
+
+    for (let i = 1; i <= MAX_PAGES_TO_CHECK; i++) {
+        const targetUrl = buildUrl(TARGET_KEYWORD, i);
+        console.error(`   -> Đang thám hiểm trang ${i}...`);
+        
+        try {
+            await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: PAGE_LOAD_TIMEOUT });
+            const currentUrl = page.url();
+            const urlParams = new URLSearchParams(new URL(currentUrl).search);
+            const actualPage = parseInt(urlParams.get('page') || '1', 10);
+
+            if (actualPage < i) {
+                console.error(`   -> Đã đến rìa thế giới! Bị đưa về trang ${actualPage} khi cố gắng đến trang ${i}.`);
+                break;
+            }
+            lastKnownGoodPage = i;
+        } catch (error) {
+             console.error(`   -> Gặp lỗi khi thám hiểm trang ${i}: ${error.message}. Coi như đã đến trang cuối.`);
+             break;
+        }
+    }
+    console.error(`[Điệp viên] Báo cáo tình báo: Phát hiện có tổng cộng ${lastKnownGoodPage} trang.`);
+    return lastKnownGoodPage;
+}
 
 // --- HÀM CHÍNH: "ĐIỆP VIÊN ĐƠN ĐỘC" ---
 async function loneWolfScraper() {
     console.error("--- CHIẾN DỊCH 'ĐIỆP VIÊN ĐƠN ĐỘC' BẮT ĐẦU ---");
     let browser;
     const allJobs = [];
+    let jobsCount = 0;
+    let finalFilename = "";
 
     try {
-        // --- GIAI ĐOẠN 1: TRANG BỊ ---
         const proxy = await getProxy(process.env.PROXY_API_KEY, process.env.PROXY_API_ENDPOINT);
-        if (!proxy) {
-            throw new Error("Không thể lấy proxy, nhiệm vụ thất bại.");
-        }
+        if (!proxy) throw new Error("Không thể lấy proxy, nhiệm vụ thất bại.");
 
         const browserArgs = [
             '--no-sandbox',
@@ -76,20 +112,8 @@ async function loneWolfScraper() {
         const page = await browser.newPage();
         await page.setViewport({ width: 1920, height: 1080 });
 
-        // --- GIAI ĐOẠN 2: "DO THÁM" (Logic 'Thám tử Dày dạn') ---
-        let totalPages = 1;
-        console.error("[Điệp viên] Bắt đầu giai đoạn DO THÁM...");
-        try {
-            const scout = await require('./discover_pages.js').discoverTotalPages(browser, proxy); // Sử dụng lại trình duyệt
-            totalPages = scout;
-        } catch (e) {
-            console.error(`[Điệp viên] Giai đoạn DO THÁM thất bại: ${e.message}. Mặc định là 1 trang.`);
-        }
-        
-        console.error(`[Điệp viên] Báo cáo tình báo: Phát hiện có tổng cộng ${totalPages} trang.`);
+        const totalPages = await discoverTotalPages(page);
 
-
-        // --- GIAI ĐOẠN 3: "KHAI THÁC" (Tuần tự) ---
         console.error("\n--- [Điệp viên] Bắt đầu giai đoạn KHAI THÁC ---");
         for (let i = 1; i <= totalPages; i++) {
             const targetUrl = buildUrl(TARGET_KEYWORD, i);
@@ -97,7 +121,6 @@ async function loneWolfScraper() {
 
             try {
                 await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: PAGE_LOAD_TIMEOUT });
-
                 const jobListSelector = 'div.job-list-search-result';
                 await page.waitForSelector(jobListSelector, { timeout: 30000 });
                 
@@ -122,7 +145,6 @@ async function loneWolfScraper() {
                 }
                  
                 jobListings.each((index, element) => {
-                    // Logic trích xuất chi tiết...
                     const titleTag = $(element).find('h3[class*="title"] a');
                     const companyLogoTag = $(element).find('img.w-100.lazy');
                     const salaryTag = $(element).find('.title-salary');
@@ -166,23 +188,24 @@ async function loneWolfScraper() {
         }
     }
 
-    // --- GIAI ĐOẠN 4: BÁO CÁO ---
     if (allJobs.length > 0) {
         const date = new Date().toLocaleDateString('vi-VN', {year: 'numeric', month: '2-digit', day: '2-digit', timeZone: 'Asia/Ho_Chi_Minh'}).replace(/\//g, '-');
-        const finalFilename = `data/topcv_${TARGET_KEYWORD}_${date}.csv`;
+        finalFilename = `data/topcv_${TARGET_KEYWORD}_${date}.csv`;
+        jobsCount = allJobs.length;
         
         fs.mkdirSync('data', { recursive: true });
         fs.writeFileSync(finalFilename, '\ufeff' + stringify(allJobs, { header: true }));
         console.error(`\n--- BÁO CÁO NHIỆM VỤ ---`);
-        console.error(`Đã tổng hợp ${allJobs.length} tin duy nhất vào ${finalFilename}`);
-        // Gửi output cho GitHub Actions
-        console.log(`::set-output name=jobs_count::${allJobs.length}`);
-        console.log(`::set-output name=final_filename::${finalFilename}`);
+        console.error(`Đã tổng hợp ${jobsCount} tin duy nhất vào ${finalFilename}`);
     } else {
         console.error('Không có dữ liệu mới để tổng hợp.');
-        console.log('::set-output name=jobs_count::0');
     }
+    
+    // Gửi output cho GitHub Actions
+    fs.appendFileSync(process.env.GITHUB_OUTPUT, `jobs_count=${jobsCount}\n`);
+    fs.appendFileSync(process.env.GITHUB_OUTPUT, `final_filename=${finalFilename}\n`);
 }
 
 // Bắt đầu chiến dịch
 loneWolfScraper();
+
