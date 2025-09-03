@@ -1,5 +1,5 @@
-// --- NHÀ THÁM HIỂM TỰ LẬP (SCRAPER) - PHIÊN BẢN HOÀN THIỆN ---
-// Cập nhật: Hợp nhất toàn bộ logic, bao gồm cả việc lấy proxy, vào một quy trình duy nhất.
+// --- ĐIỆP VIÊN ĐƠN ĐỘC (SCRAPER) - PHIÊN BẢN "BẢN ĐỒ" ---
+// Cập nhật: Hợp nhất toàn bộ logic và nhận đường dẫn trình duyệt một cách tường minh.
 
 const puppeteer = require('puppeteer-extra');
 const StealthPlugin = require('puppeteer-extra-plugin-stealth');
@@ -11,10 +11,10 @@ const axios = require('axios');
 puppeteer.use(StealthPlugin());
 
 // --- CẤU HÌNH ---
-const TARGET_KEYWORD = "ke-toan";
+const TARGET_KEYWORD = "ke-toan"; 
 const BROWSER_TIMEOUT = 120000;
 const PAGE_LOAD_TIMEOUT = 60000;
-const MAX_PAGES_TO_CHECK = 200;
+const MAX_PAGES_TO_CHECK = 200; 
 
 // --- HÀM TIỆN ÍCH ---
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
@@ -30,26 +30,26 @@ function buildUrl(keyword, page) {
     }
 }
 
-// --- HÀM LẤY PROXY (Tích hợp sẵn) ---
+// --- HÀM LẤY PROXY ---
 async function getProxy(apiKey, apiEndpoint) {
     if (!apiKey || !apiEndpoint) {
         console.error("Cảnh báo: Không có thông tin API Proxy. Chạy không cần proxy.");
         return null;
     }
     try {
-        console.error("-> [Nhà Thám hiểm] Đang yêu cầu một danh tính proxy mới từ API...");
+        console.error("-> [Điệp viên] Đang yêu cầu một danh tính proxy mới từ API...");
         const response = await axios.get(apiEndpoint, {
             params: { key: apiKey, region: 'random' },
             timeout: 20000
         });
         if (response.data?.success && response.data?.data?.http) {
             const [host, port] = response.data.data.http.split(':');
-            console.error(`-> [Nhà Thám hiểm] Đã nhận proxy mới thành công: ${host}:${port}`);
+            console.error(`-> [Điệp viên] Đã nhận proxy mới thành công: ${host}:${port}`);
             return { host, port };
         }
         throw new Error(`Phản hồi không như mong đợi: ${JSON.stringify(response.data)}`);
     } catch (error) {
-        console.error(`-> [Nhà Thám hiểm] Lỗi nghiêm trọng khi yêu cầu proxy mới: ${error.message}`);
+        console.error(`-> [Điệp viên] Lỗi nghiêm trọng khi yêu cầu proxy mới: ${error.message}`);
         throw error;
     }
 }
@@ -57,7 +57,7 @@ async function getProxy(apiKey, apiEndpoint) {
 // --- HÀM DO THÁM (Logic 'Thám tử Dày dạn') ---
 async function discoverTotalPages(page) {
     let lastKnownGoodPage = 1;
-    console.error("\n--- [Nhà Thám hiểm] Bắt đầu giai đoạn DO THÁM ---");
+    console.error("\n--- [Điệp viên] Bắt đầu giai đoạn DO THÁM ---");
 
     for (let i = 1; i <= MAX_PAGES_TO_CHECK; i++) {
         const targetUrl = buildUrl(TARGET_KEYWORD, i);
@@ -79,19 +79,25 @@ async function discoverTotalPages(page) {
              break;
         }
     }
-    console.error(`[Nhà Thám hiểm] Báo cáo tình báo: Phát hiện có tổng cộng ${lastKnownGoodPage} trang.`);
+    console.error(`[Điệp viên] Báo cáo tình báo: Phát hiện có tổng cộng ${lastKnownGoodPage} trang.`);
     return lastKnownGoodPage;
 }
 
-// --- HÀM CHÍNH: "NHÀ THÁM HIỂM TỰ LẬP" ---
-async function loneExplorerScraper() {
-    console.error("--- CHIẾN DỊCH 'NHÀ THÁM HIỂM TỰ LẬP' BẮT ĐẦU ---");
+// --- HÀM CHÍNH: "ĐIỆP VIÊN ĐƠN ĐỘC" ---
+async function loneWolfScraper() {
+    console.error("--- CHIẾN DỊCH 'ĐIỆP VIÊN ĐƠN ĐỘC' BẮT ĐẦU ---");
     let browser;
     const allJobs = [];
     let jobsCount = 0;
     let finalFilename = "";
 
     try {
+        // Nhận "Bản đồ" từ "bộ não"
+        const CHROME_EXECUTABLE_PATH = process.env.CHROME_PATH;
+        if (!CHROME_EXECUTABLE_PATH) {
+            throw new Error("Nhiệm vụ thất bại: Không nhận được 'Bản đồ Dẫn đường' (CHROME_PATH).");
+        }
+
         const proxy = await getProxy(process.env.PROXY_API_KEY, process.env.PROXY_API_ENDPOINT);
         if (!proxy) throw new Error("Không thể lấy proxy, nhiệm vụ thất bại.");
 
@@ -101,9 +107,12 @@ async function loneExplorerScraper() {
             `--proxy-server=${proxy.host}:${proxy.port}`,
         ];
 
-        console.error(`[Nhà Thám hiểm] Đang khởi tạo trình duyệt với danh tính ${proxy.host}...`);
+        console.error(`[Điệp viên] Đang khởi tạo trình duyệt với danh tính ${proxy.host}...`);
+        console.error(`[Điệp viên] Sử dụng "chiếc xe" tại: ${CHROME_EXECUTABLE_PATH}`);
+        
         browser = await puppeteer.launch({
             headless: true,
+            executablePath: CHROME_EXECUTABLE_PATH, // <-- SỬ DỤNG "BẢN ĐỒ"
             args: browserArgs,
             ignoreHTTPSErrors: true,
             timeout: BROWSER_TIMEOUT
@@ -114,7 +123,7 @@ async function loneExplorerScraper() {
 
         const totalPages = await discoverTotalPages(page);
 
-        console.error("\n--- [Nhà Thám hiểm] Bắt đầu giai đoạn KHAI THÁC ---");
+        console.error("\n--- [Điệp viên] Bắt đầu giai đoạn KHAI THÁC ---");
         for (let i = 1; i <= totalPages; i++) {
             const targetUrl = buildUrl(TARGET_KEYWORD, i);
             console.error(`   -> Đang khai thác trang ${i}/${totalPages}...`);
@@ -124,15 +133,15 @@ async function loneExplorerScraper() {
                 const jobListSelector = 'div.job-list-search-result';
                 await page.waitForSelector(jobListSelector, { timeout: 30000 });
                 
-                await sleep(2000); // Thêm một khoảng nghỉ nhỏ để đảm bảo mọi thứ ổn định
+                await sleep(2000);
                 
                 const content = await page.content();
                 const $ = cheerio.load(content);
                 const jobListings = $('div[class*="job-item"]');
 
                 if (jobListings.length === 0 && i < totalPages) {
-                    console.error(`   -> Cảnh báo: Trang ${i} không có nội dung. Chuyển sang trang tiếp theo.`);
-                    continue;
+                     console.error(`   -> Cảnh báo: Trang ${i} không có nội dung. Chuyển sang trang tiếp theo.`);
+                     continue;
                 }
                  
                 jobListings.each((index, element) => {
@@ -158,7 +167,7 @@ async function loneExplorerScraper() {
                         'salary': salaryTag.text().trim() || 'Thỏa thuận',
                         'Nơi làm việc': locationTag.text().trim() || null,
                         'thời gian đăng': dateText,
-                        'Kinh nghiệm làm việc tối thiểu': (expTag.text().trim() || '').trim() || null,
+                        'Kinh nghiệm làm việc tối thiểu': (expTag.text() || '').trim() || null,
                     });
                 });
 
@@ -171,11 +180,11 @@ async function loneExplorerScraper() {
             }
         }
     } catch (error) {
-        console.error(`[Nhà Thám hiểm] Nhiệm vụ thất bại không thể phục hồi: ${error.message}`);
+        console.error(`[Điệp viên] Nhiệm vụ thất bại không thể phục hồi: ${error.message}`);
     } finally {
         if (browser) {
             await browser.close();
-            console.error("\n[Nhà Thám hiểm] Rút lui an toàn, đã đóng trình duyệt.");
+            console.error("\n[Điệp viên] Rút lui an toàn, đã đóng trình duyệt.");
         }
     }
 
@@ -198,5 +207,5 @@ async function loneExplorerScraper() {
 }
 
 // Bắt đầu chiến dịch
-loneExplorerScraper();
+loneWolfScraper();
 
