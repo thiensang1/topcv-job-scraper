@@ -1,5 +1,5 @@
-# --- QUY TRÌNH TỰ ĐỘNG HÓA CUỐI CÙNG - PHIÊN BẢN "ĐIỆP VIÊN ĐƠN ĐỘC" ---
-# Cập nhật: Tái cấu trúc toàn bộ thành một quy trình duy nhất, tuần tự.
+# --- QUY TRÌNH TỰ ĐỘNG HÓA CUỐI CÙNG - PHIÊN BẢN "BẦY SÓI BỀN BỈ" ---
+# Cập nhật: Triển khai một đội ngũ song song, mỗi thành viên có khả năng tự làm mới proxy.
 
 name: 'TopCV Daily Scraper'
 
@@ -9,12 +9,38 @@ on:
   workflow_dispatch:
 
 jobs:
-  # --- MỘT JOB DUY NHẤT ĐỂ THỰC HIỆN TOÀN BỘ "CHIẾN DỊCH" ---
-  scrape-and-commit:
+  # --- GIAI ĐOẠN 1: "THÁM TỬ DÀY DẠN" (Tự chủ) ---
+  discover:
     runs-on: ubuntu-latest
-    
+    outputs:
+      totalPages: ${{ steps.get_pages.outputs.count }}
     steps:
-      # --- GIAI ĐOẠN 1: CHUẨN BỊ "CĂN CỨ" ---
+      - name: 'Checkout repository'
+        uses: actions/checkout@v4
+      - name: 'Set up Node.js'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+      - name: 'Setup Chrome browser for Scout'
+        uses: browser-actions/setup-chrome@latest
+      - name: 'Install dependencies for scout'
+        run: npm install puppeteer puppeteer-extra puppeteer-extra-plugin-stealth cheerio
+      - name: 'Run scout script to get total pages'
+        id: get_pages
+        # "Thám tử" không cần proxy, vì nó chỉ chạy 1 lần duy nhất, rất khó bị phát hiện
+        run: echo "count=$(node discover_pages.js)" >> $GITHUB_OUTPUT
+
+  # --- GIAI ĐOẠN 2: TRIỂN KHAI "BẦY SÓI BỀN BỈ" ---
+  collect:
+    needs: discover
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # Triển khai một "bầy sói" gồm 10 "công nhân"
+        # 10 công nhân sẽ chia nhau toàn bộ số trang
+        worker: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] 
+    steps:
       - name: 'Checkout repository'
         uses: actions/checkout@v4
       - name: 'Set up Node.js'
@@ -22,26 +48,70 @@ jobs:
         with:
           node-version: '18'
           cache: 'npm'
-      - name: 'Setup Chrome browser'
+      - name: 'Setup Chrome browser for Wolf'
         uses: browser-actions/setup-chrome@latest
       - name: 'Install all project dependencies'
         run: npm install
-
-      # --- GIAI ĐOẠN 2: TRIỂN KHAI "ĐIỆP VIÊN" ---
-      - name: 'Run Lone Wolf Scraper'
-        id: run_scraper # Đặt ID để lấy output
+      
+      - name: 'Run Persistent Wolf worker'
         env:
+          # Cung cấp "chìa khóa" để "bộ đàm" hoạt động
           PROXY_API_ENDPOINT: ${{ secrets.PROXY_API_ENDPOINT }}
           PROXY_API_KEY: ${{ secrets.PROXY_API_KEY }}
-        run: node scraper.js
+        run: |
+          # Tính toán khoảng trang cho mỗi "con sói"
+          TOTAL_PAGES=${{ needs.discover.outputs.totalPages }}
+          TOTAL_WORKERS=10 # Phải khớp với số lượng worker trong matrix
+          
+          # Công thức chia việc: (tổng số trang + tổng số worker - 1) / tổng số worker
+          PAGES_PER_WORKER=$(( (TOTAL_PAGES + TOTAL_WORKERS - 1) / TOTAL_WORKERS ))
+          
+          WORKER_INDEX=${{ matrix.worker }}
+          START_PAGE=$(( (WORKER_INDEX - 1) * PAGES_PER_WORKER + 1 ))
+          END_PAGE=$(( WORKER_INDEX * PAGES_PER_WORKER ))
+          
+          # Đảm bảo "con sói" cuối cùng không chạy quá tổng số trang
+          if (( START_PAGE <= TOTAL_PAGES )); then
+            if (( END_PAGE > TOTAL_PAGES )); then
+              END_PAGE=$TOTAL_PAGES
+            fi
+            # "Bản chỉ thị" cho scraper.js
+            node scraper.js "ke-toan" $START_PAGE $END_PAGE $WORKER_INDEX
+          else
+            echo "Worker ${{ matrix.worker }} không cần chạy."
+          fi
       
-      # --- GIAI ĐOẠN 3: TỔNG HỢP VÀ LƯU TRỮ ---
+      - name: 'Upload worker artifact'
+        uses: actions/upload-artifact@v4
+        with:
+          name: raw-results-worker-${{ matrix.worker }}
+          path: results_worker_${{ matrix.worker }}.csv
+          if-no-files-found: ignore
+
+  # --- GIAI ĐOẠN 3: TỔNG HỢP VÀ LƯU TRỮ ---
+  combine-and-commit:
+    needs: collect
+    runs-on: ubuntu-latest
+    steps:
+      - name: 'Checkout repository'
+        uses: actions/checkout@v4
+      - name: 'Set up Node.js'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+      - name: 'Download all worker artifacts'
+        uses: actions/download-artifact@v4
+        with:
+          path: ./raw-results
+      - name: 'Run combination script'
+        id: combine
+        run: node combine_results.js
+      
       - name: 'Commit results to repository'
-        # Chỉ commit nếu "Điệp viên" báo cáo đã thu thập được dữ liệu
-        if: steps.run_scraper.outputs.jobs_count > 0
+        if: steps.combine.outputs.jobs_count > 0
         run: |
           git config --global user.name 'GitHub Actions Scraper'
           git config --global user.email 'actions@github.com'
-          git add ${{ steps.run_scraper.outputs.final_filename }}
-          git commit -m "📊 Dữ liệu TopCV: Thêm ${{ steps.run_scraper.outputs.jobs_count }} tin mới vào ${{ steps.run_scraper.outputs.final_filename }}"
+          git add ${{ steps.combine.outputs.final_filename }}
+          git commit -m "📊 Dữ liệu TopCV: Thêm ${{ steps.combine.outputs.jobs_count }} tin mới vào ${{ steps.combine.outputs.final_filename }}"
           git push
