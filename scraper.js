@@ -1,5 +1,5 @@
-// --- ĐIỆP VIÊN ĐƠN ĐỘC (SCRAPER) - PHIÊN BẢN TỔNG HỢP ---
-// Cập nhật: Hợp nhất toàn bộ logic vào một quy trình duy nhất, tuần tự.
+// --- NHÀ THÁM HIỂM TỰ LẬP (SCRAPER) - PHIÊN BẢN HOÀN THIỆN ---
+// Cập nhật: Hợp nhất toàn bộ logic, bao gồm cả việc lấy proxy, vào một quy trình duy nhất.
 
 const puppeteer = require('puppeteer-extra');
 const StealthPlugin = require('puppeteer-extra-plugin-stealth');
@@ -11,10 +11,10 @@ const axios = require('axios');
 puppeteer.use(StealthPlugin());
 
 // --- CẤU HÌNH ---
-const TARGET_KEYWORD = "ke-toan"; 
-const BROWSER_TIMEOUT = 120000; // Tăng thời gian chờ cho nhiệm vụ dài
+const TARGET_KEYWORD = "ke-toan";
+const BROWSER_TIMEOUT = 120000;
 const PAGE_LOAD_TIMEOUT = 60000;
-const MAX_PAGES_TO_CHECK = 200; 
+const MAX_PAGES_TO_CHECK = 200;
 
 // --- HÀM TIỆN ÍCH ---
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
@@ -30,34 +30,34 @@ function buildUrl(keyword, page) {
     }
 }
 
-// --- HÀM LẤY PROXY ---
+// --- HÀM LẤY PROXY (Tích hợp sẵn) ---
 async function getProxy(apiKey, apiEndpoint) {
     if (!apiKey || !apiEndpoint) {
         console.error("Cảnh báo: Không có thông tin API Proxy. Chạy không cần proxy.");
         return null;
     }
     try {
-        console.error("-> Đang yêu cầu một danh tính proxy mới từ API...");
+        console.error("-> [Nhà Thám hiểm] Đang yêu cầu một danh tính proxy mới từ API...");
         const response = await axios.get(apiEndpoint, {
             params: { key: apiKey, region: 'random' },
-            timeout: 15000
+            timeout: 20000
         });
         if (response.data?.success && response.data?.data?.http) {
             const [host, port] = response.data.data.http.split(':');
-            console.error(`-> Đã nhận proxy mới thành công: ${host}:${port}`);
+            console.error(`-> [Nhà Thám hiểm] Đã nhận proxy mới thành công: ${host}:${port}`);
             return { host, port };
         }
         throw new Error(`Phản hồi không như mong đợi: ${JSON.stringify(response.data)}`);
     } catch (error) {
-        console.error(`-> Lỗi nghiêm trọng khi yêu cầu proxy mới: ${error.message}`);
-        throw error; // Ném lỗi ra ngoài để quy trình chính có thể xử lý
+        console.error(`-> [Nhà Thám hiểm] Lỗi nghiêm trọng khi yêu cầu proxy mới: ${error.message}`);
+        throw error;
     }
 }
 
 // --- HÀM DO THÁM (Logic 'Thám tử Dày dạn') ---
 async function discoverTotalPages(page) {
     let lastKnownGoodPage = 1;
-    console.error("[Điệp viên] Bắt đầu giai đoạn DO THÁM...");
+    console.error("\n--- [Nhà Thám hiểm] Bắt đầu giai đoạn DO THÁM ---");
 
     for (let i = 1; i <= MAX_PAGES_TO_CHECK; i++) {
         const targetUrl = buildUrl(TARGET_KEYWORD, i);
@@ -79,13 +79,13 @@ async function discoverTotalPages(page) {
              break;
         }
     }
-    console.error(`[Điệp viên] Báo cáo tình báo: Phát hiện có tổng cộng ${lastKnownGoodPage} trang.`);
+    console.error(`[Nhà Thám hiểm] Báo cáo tình báo: Phát hiện có tổng cộng ${lastKnownGoodPage} trang.`);
     return lastKnownGoodPage;
 }
 
-// --- HÀM CHÍNH: "ĐIỆP VIÊN ĐƠN ĐỘC" ---
-async function loneWolfScraper() {
-    console.error("--- CHIẾN DỊCH 'ĐIỆP VIÊN ĐƠN ĐỘC' BẮT ĐẦU ---");
+// --- HÀM CHÍNH: "NHÀ THÁM HIỂM TỰ LẬP" ---
+async function loneExplorerScraper() {
+    console.error("--- CHIẾN DỊCH 'NHÀ THÁM HIỂM TỰ LẬP' BẮT ĐẦU ---");
     let browser;
     const allJobs = [];
     let jobsCount = 0;
@@ -101,7 +101,7 @@ async function loneWolfScraper() {
             `--proxy-server=${proxy.host}:${proxy.port}`,
         ];
 
-        console.error(`[Điệp viên] Đang khởi tạo trình duyệt với danh tính ${proxy.host}...`);
+        console.error(`[Nhà Thám hiểm] Đang khởi tạo trình duyệt với danh tính ${proxy.host}...`);
         browser = await puppeteer.launch({
             headless: true,
             args: browserArgs,
@@ -114,7 +114,7 @@ async function loneWolfScraper() {
 
         const totalPages = await discoverTotalPages(page);
 
-        console.error("\n--- [Điệp viên] Bắt đầu giai đoạn KHAI THÁC ---");
+        console.error("\n--- [Nhà Thám hiểm] Bắt đầu giai đoạn KHAI THÁC ---");
         for (let i = 1; i <= totalPages; i++) {
             const targetUrl = buildUrl(TARGET_KEYWORD, i);
             console.error(`   -> Đang khai thác trang ${i}/${totalPages}...`);
@@ -124,24 +124,15 @@ async function loneWolfScraper() {
                 const jobListSelector = 'div.job-list-search-result';
                 await page.waitForSelector(jobListSelector, { timeout: 30000 });
                 
-                let previousHtml = '', currentHtml = '', stabilityCounter = 0;
-                for (let check = 0; check < 10; check++) {
-                    currentHtml = await page.$eval(jobListSelector, element => element.innerHTML);
-                    if (currentHtml.replace(/\s/g, '') === previousHtml.replace(/\s/g, '') && currentHtml.length > 0) {
-                        if (++stabilityCounter >= 2) break;
-                    } else { stabilityCounter = 0; }
-                    previousHtml = currentHtml;
-                    await sleep(2000);
-                }
-                if (stabilityCounter < 2) throw new Error("Trang không ổn định.");
+                await sleep(2000); // Thêm một khoảng nghỉ nhỏ để đảm bảo mọi thứ ổn định
                 
                 const content = await page.content();
                 const $ = cheerio.load(content);
                 const jobListings = $('div[class*="job-item"]');
 
-                if (jobListings.length === 0) {
-                    console.error(`   -> Không tìm thấy tin tuyển dụng nào trên trang ${i}, có thể đã đến trang cuối.`);
-                    break;
+                if (jobListings.length === 0 && i < totalPages) {
+                    console.error(`   -> Cảnh báo: Trang ${i} không có nội dung. Chuyển sang trang tiếp theo.`);
+                    continue;
                 }
                  
                 jobListings.each((index, element) => {
@@ -167,7 +158,7 @@ async function loneWolfScraper() {
                         'salary': salaryTag.text().trim() || 'Thỏa thuận',
                         'Nơi làm việc': locationTag.text().trim() || null,
                         'thời gian đăng': dateText,
-                        'Kinh nghiệm làm việc tối thiểu': (expTag.text() || '').trim() || null,
+                        'Kinh nghiệm làm việc tối thiểu': (expTag.text().trim() || '').trim() || null,
                     });
                 });
 
@@ -180,11 +171,11 @@ async function loneWolfScraper() {
             }
         }
     } catch (error) {
-        console.error(`[Điệp viên] Nhiệm vụ thất bại không thể phục hồi: ${error.message}`);
+        console.error(`[Nhà Thám hiểm] Nhiệm vụ thất bại không thể phục hồi: ${error.message}`);
     } finally {
         if (browser) {
             await browser.close();
-            console.error("[Điệp viên] Rút lui an toàn, đã đóng trình duyệt.");
+            console.error("\n[Nhà Thám hiểm] Rút lui an toàn, đã đóng trình duyệt.");
         }
     }
 
@@ -198,7 +189,7 @@ async function loneWolfScraper() {
         console.error(`\n--- BÁO CÁO NHIỆM VỤ ---`);
         console.error(`Đã tổng hợp ${jobsCount} tin duy nhất vào ${finalFilename}`);
     } else {
-        console.error('Không có dữ liệu mới để tổng hợp.');
+        console.error('\nKhông có dữ liệu mới để tổng hợp.');
     }
     
     // Gửi output cho GitHub Actions
@@ -207,5 +198,5 @@ async function loneWolfScraper() {
 }
 
 // Bắt đầu chiến dịch
-loneWolfScraper();
+loneExplorerScraper();
 
