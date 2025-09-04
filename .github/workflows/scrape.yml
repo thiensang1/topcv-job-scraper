@@ -1,4 +1,4 @@
-# --- QUY TRÌNH TỰ ĐỘNG HÓA CUỐI CÙNG - PHIÊN BẢN "BẢN ĐỒ" ---
+# --- QUY TRÌNH TỰ ĐỘNG HÓA CUỐI CÙNG - PHIÊN BẢN "TẮC KÈ HOA" ---
 # Cập nhật: Tái cấu trúc thành quy trình "Điệp viên Đơn độc" và cung cấp "Bản đồ" cho nó.
 
 name: 'TopCV Daily Scraper'
@@ -36,7 +36,7 @@ jobs:
         run: npm install
 
       # --- GIAI ĐOẠN 2: TRIỂN KHAI "ĐIỆP VIÊN" ---
-      - name: 'Run Lone Wolf Scraper'
+      - name: 'Run Chameleon Scraper'
         id: run_scraper # Đặt ID để lấy output
         env:
           PROXY_API_ENDPOINT: ${{ secrets.PROXY_API_ENDPOINT }}
