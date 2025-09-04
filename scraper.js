@@ -32,7 +32,6 @@ function buildUrl(keyword, page) {
 
 // --- HÀM LẤY PROXY ---
 async function getProxy(apiKey, apiEndpoint) {
-    // ... (Giữ nguyên hàm getProxy)
     if (!apiKey || !apiEndpoint) {
         console.error("Cảnh báo: Không có thông tin API Proxy. Chạy không cần proxy.");
         return null;
@@ -57,7 +56,6 @@ async function getProxy(apiKey, apiEndpoint) {
 
 // --- HÀM DO THÁM ---
 async function discoverTotalPages(page) {
-    // ... (Giữ nguyên hàm discoverTotalPages)
     let lastKnownGoodPage = 1;
     console.error("\n--- [Tắc kè hoa] Bắt đầu giai đoạn DO THÁM ---");
 
@@ -85,8 +83,27 @@ async function discoverTotalPages(page) {
     return lastKnownGoodPage;
 }
 
+// --- HÀM KHỞI TẠO TRÌNH DUYỆT (Tái sử dụng) ---
+async function initializeBrowser(proxy, chromePath) {
+     if (!proxy) throw new Error("Không có proxy để khởi tạo trình duyệt.");
+     const browserArgs = [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        `--proxy-server=${proxy.host}:${proxy.port}`,
+    ];
+    console.error(`\n[Tắc kè hoa] Đang khởi tạo trình duyệt với danh tính ${proxy.host}...`);
+    return await puppeteer.launch({
+        headless: true,
+        executablePath: chromePath,
+        args: browserArgs,
+        ignoreHTTPSErrors: true,
+        timeout: BROWSER_TIMEOUT
+    });
+}
+
+
 // --- HÀM CHÍNH: "ĐIỆP VIÊN TẮC KÈ HOA" ---
-async function chameleonScraper() {
+async function loneChameleonScraper() {
     console.error("--- CHIẾN DỊCH 'ĐIỆP VIÊN TẮC KÈ HOA' BẮT ĐẦU ---");
     let browser;
     const allJobs = [];
@@ -100,61 +117,35 @@ async function chameleonScraper() {
         }
 
         let proxy = await getProxy(process.env.PROXY_API_KEY, process.env.PROXY_API_ENDPOINT);
-        if (!proxy) throw new Error("Không thể lấy proxy ban đầu, nhiệm vụ thất bại.");
+        browser = await initializeBrowser(proxy, CHROME_EXECUTABLE_PATH);
 
-        const browserArgs = [
-            '--no-sandbox',
-            '--disable-setuid-sandbox',
-            `--proxy-server=${proxy.host}:${proxy.port}`,
-        ];
-
-        console.error(`[Tắc kè hoa] Đang khởi tạo trình duyệt với danh tính ${proxy.host}...`);
-        
-        browser = await puppeteer.launch({
-            headless: true,
-            executablePath: CHROME_EXECUTABLE_PATH,
-            args: browserArgs,
-            ignoreHTTPSErrors: true,
-            timeout: BROWSER_TIMEOUT
-        });
-
-        const page = await browser.newPage();
+        let page = await browser.newPage();
         await page.setViewport({ width: 1920, height: 1080 });
 
         const totalPages = await discoverTotalPages(page);
         
-        const initialDelay = randomDelay(10000, 20000);
+        const initialDelay = randomDelay(5000, 10000);
         console.error(`\n[Tắc kè hoa] Do thám hoàn tất. Tạm nghỉ ${(initialDelay / 1000).toFixed(2)} giây...`);
         await sleep(initialDelay);
 
-        // --- LOGIC MỚI: "BIẾN HÌNH" NGẪU NHIÊN ---
-        let pagesUntilNextChange = randomDelay(10, 30); // Xác định "độ bền nhân dạng"
+        let pagesUntilNextChange = randomDelay(10, 30);
         console.error(`[Tắc kè hoa] Độ bền nhân dạng ban đầu: ${pagesUntilNextChange} trang.`);
 
         console.error("\n--- [Tắc kè hoa] Bắt đầu giai đoạn KHAI THÁC ---");
         for (let i = 1; i <= totalPages; i++) {
             
-            // Kiểm tra xem có cần "biến hình" không
             if (pagesUntilNextChange <= 0) {
                 console.error(`\n   -> [Tắc kè hoa] Hết độ bền nhân dạng. Bắt đầu "biến hình"...`);
-                await browser.close(); // Hủy phiên làm việc cũ
+                await browser.close();
 
                 proxy = await getProxy(process.env.PROXY_API_KEY, process.env.PROXY_API_ENDPOINT);
-                if (!proxy) {
-                    console.error("   -> Không thể lấy proxy mới để 'biến hình'. Dừng nhiệm vụ.");
-                    break;
-                }
+                browser = await initializeBrowser(proxy, CHROME_EXECUTABLE_PATH);
                 
-                const newBrowserArgs = ['--no-sandbox', '--disable-setuid-sandbox', `--proxy-server=${proxy.host}:${proxy.port}`];
-                browser = await puppeteer.launch({ headless: true, executablePath: CHROME_EXECUTABLE_PATH, args: newBrowserArgs, ignoreHTTPSErrors: true, timeout: BROWSER_TIMEOUT });
-                
-                // Mở lại tab mới trong phiên làm việc mới
-                const newPage = await browser.newPage();
-                Object.assign(page, newPage); // Ghi đè đối tượng page cũ
+                page = await browser.newPage();
                 await page.setViewport({ width: 1920, height: 1080 });
                 
-                pagesUntilNextChange = randomDelay(10, 30); // Xác định lại "độ bền"
-                console.error(`   -> [Tắc kè hoa] "Biến hình" thành công với danh tính ${proxy.host}. Độ bền nhân dạng mới: ${pagesUntilNextChange} trang.`);
+                pagesUntilNextChange = randomDelay(10, 30);
+                console.error(`   -> [Tắc kè hoa] "Biến hình" thành công. Độ bền nhân dạng mới: ${pagesUntilNextChange} trang.`);
             }
 
             const targetUrl = buildUrl(TARGET_KEYWORD, i);
@@ -173,36 +164,39 @@ async function chameleonScraper() {
 
                 if (jobListings.length === 0 && i < totalPages) {
                      console.error(`   -> Cảnh báo: Trang ${i} không có nội dung. Chuyển sang trang tiếp theo.`);
-                     pagesUntilNextChange--; // Vẫn trừ độ bền
+                     pagesUntilNextChange--;
                      continue;
                 }
                  
                 jobListings.each((index, element) => {
-                    // ... (logic trích xuất chi tiết giữ nguyên)
                     const titleTag = $(element).find('h3[class*="title"] a');
                     const companyLogoTag = $(element).find('img.w-100.lazy');
                     const salaryTag = $(element).find('.title-salary');
                     const locationTag = $(element).find('.city-text');
                     const dateContainerTag = $(element).find('span.hidden-on-quick-view');
                     const expTag = $(element).find('.exp');
+                    
                     let companyText = companyLogoTag.length ? (companyLogoTag.attr('alt') || '').trim() : null;
                     let dateText = null;
                     if (dateContainerTag.length) {
                         const nextNode = dateContainerTag[0].nextSibling;
                         if (nextNode && nextNode.type === 'text') dateText = nextNode.data.trim();
                     }
-                    allJobs.push({'keyword': TARGET_KEYWORD, 'title': titleTag.text().trim() || null, 'link': titleTag.attr('href') ? `https://www.topcv.vn${titleTag.attr('href')}` : null, 'company': companyText, 'salary': salaryTag.text().trim() || 'Thỏa thuận', 'Nơi làm việc': locationTag.text().trim() || null, 'thời gian đăng': dateText, 'Kinh nghiệm làm việc tối thiểu': (expTag.text() || '').trim() || null});
+                    
+                    allJobs.push({
+                        'keyword': TARGET_KEYWORD, 'title': titleTag.text().trim() || null, 'link': titleTag.attr('href') ? `https://www.topcv.vn${titleTag.attr('href')}` : null, 'company': companyText, 'salary': salaryTag.text().trim() || 'Thỏa thuận', 'Nơi làm việc': locationTag.text().trim() || null, 'thời gian đăng': dateText, 'Kinh nghiệm làm việc tối thiểu': (expTag.text() || '').trim() || null,
+                    });
                 });
 
                 console.error(`   -> Đã thu thập ${jobListings.length} tin từ trang ${i}.`);
-                pagesUntilNextChange--; // Giảm độ bền
+                pagesUntilNextChange--;
                 
-                const betweenPagesDelay = randomDelay(18000, 23500);
+                const betweenPagesDelay = randomDelay(3000, 7000);
                 await sleep(betweenPagesDelay);
 
             } catch (error) {
                 console.error(`   -> Lỗi khi xử lý trang ${i}: ${error.message}. Chuyển sang trang tiếp theo.`);
-                pagesUntilNextChange--; // Vẫn trừ độ bền
+                pagesUntilNextChange--;
                 continue;
             }
         }
@@ -215,11 +209,11 @@ async function chameleonScraper() {
         }
     }
 
-    // ... (logic báo cáo và gửi output giữ nguyên)
     if (allJobs.length > 0) {
         const date = new Date().toLocaleDateString('vi-VN', {year: 'numeric', month: '2-digit', day: '2-digit', timeZone: 'Asia/Ho_Chi_Minh'}).replace(/\//g, '-');
         finalFilename = `data/topcv_${TARGET_KEYWORD}_${date}.csv`;
         jobsCount = allJobs.length;
+        
         fs.mkdirSync('data', { recursive: true });
         fs.writeFileSync(finalFilename, '\ufeff' + stringify(allJobs, { header: true }));
         console.error(`\n--- BÁO CÁO NHIỆM VỤ ---`);
@@ -227,6 +221,7 @@ async function chameleonScraper() {
     } else {
         console.error('\nKhông có dữ liệu mới để tổng hợp.');
     }
+    
     const output = `jobs_count=${jobsCount}\nfinal_filename=${finalFilename}\n`;
     fs.appendFileSync(process.env.GITHUB_OUTPUT, output);
 }
