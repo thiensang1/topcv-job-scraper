@@ -123,7 +123,7 @@ async function chameleonScraper() {
 
         const totalPages = await discoverTotalPages(page);
         
-        const initialDelay = randomDelay(18000, 25000);
+        const initialDelay = randomDelay(10000, 20000);
         console.error(`\n[Tắc kè hoa] Do thám hoàn tất. Tạm nghỉ ${(initialDelay / 1000).toFixed(2)} giây...`);
         await sleep(initialDelay);
 
@@ -197,7 +197,7 @@ async function chameleonScraper() {
                 console.error(`   -> Đã thu thập ${jobListings.length} tin từ trang ${i}.`);
                 pagesUntilNextChange--; // Giảm độ bền
                 
-                const betweenPagesDelay = randomDelay(3000, 7000);
+                const betweenPagesDelay = randomDelay(18000, 23500);
                 await sleep(betweenPagesDelay);
 
             } catch (error) {
