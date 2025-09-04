@@ -123,7 +123,7 @@ async function chameleonScraper() {
 
         const totalPages = await discoverTotalPages(page);
         
-        const initialDelay = randomDelay(5000, 10000);
+        const initialDelay = randomDelay(18000, 25000);
         console.error(`\n[Tắc kè hoa] Do thám hoàn tất. Tạm nghỉ ${(initialDelay / 1000).toFixed(2)} giây...`);
         await sleep(initialDelay);
 
