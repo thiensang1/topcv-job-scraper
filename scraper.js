@@ -128,7 +128,8 @@ async function loneChameleonScraper() {
         console.error(`\n[Tắc kè hoa] Do thám hoàn tất. Tạm nghỉ ${(initialDelay / 1000).toFixed(2)} giây...`);
         await sleep(initialDelay);
 
-        let pagesUntilNextChange = randomDelay(10, 30);
+        // --- LOGIC MỚI: "BIẾN HÌNH" NGẪU NHIÊN ---
+        let pagesUntilNextChange = randomDelay(10, 30); // Xác định "độ bền nhân dạng"
         console.error(`[Tắc kè hoa] Độ bền nhân dạng ban đầu: ${pagesUntilNextChange} trang.`);
 
         console.error("\n--- [Tắc kè hoa] Bắt đầu giai đoạn KHAI THÁC ---");
@@ -141,10 +142,10 @@ async function loneChameleonScraper() {
                 proxy = await getProxy(process.env.PROXY_API_KEY, process.env.PROXY_API_ENDPOINT);
                 browser = await initializeBrowser(proxy, CHROME_EXECUTABLE_PATH);
                 
-                page = await browser.newPage();
+                page = await browser.newPage(); // Phải tạo lại page trong browser mới
                 await page.setViewport({ width: 1920, height: 1080 });
                 
-                pagesUntilNextChange = randomDelay(10, 30);
+                pagesUntilNextChange = randomDelay(10, 30); // Xác định lại "độ bền"
                 console.error(`   -> [Tắc kè hoa] "Biến hình" thành công. Độ bền nhân dạng mới: ${pagesUntilNextChange} trang.`);
             }
 
@@ -164,7 +165,7 @@ async function loneChameleonScraper() {
 
                 if (jobListings.length === 0 && i < totalPages) {
                      console.error(`   -> Cảnh báo: Trang ${i} không có nội dung. Chuyển sang trang tiếp theo.`);
-                     pagesUntilNextChange--;
+                     pagesUntilNextChange--; // Vẫn trừ độ bền
                      continue;
                 }
                  
@@ -184,19 +185,26 @@ async function loneChameleonScraper() {
                     }
                     
                     allJobs.push({
-                        'keyword': TARGET_KEYWORD, 'title': titleTag.text().trim() || null, 'link': titleTag.attr('href') ? `https://www.topcv.vn${titleTag.attr('href')}` : null, 'company': companyText, 'salary': salaryTag.text().trim() || 'Thỏa thuận', 'Nơi làm việc': locationTag.text().trim() || null, 'thời gian đăng': dateText, 'Kinh nghiệm làm việc tối thiểu': (expTag.text() || '').trim() || null,
+                        'keyword': TARGET_KEYWORD,
+                        'title': titleTag.text().trim() || null,
+                        'link': titleTag.attr('href') ? `https://www.topcv.vn${titleTag.attr('href')}` : null,
+                        'company': companyText,
+                        'salary': salaryTag.text().trim() || 'Thỏa thuận',
+                        'Nơi làm việc': locationTag.text().trim() || null,
+                        'thời gian đăng': dateText,
+                        'Kinh nghiệm làm việc tối thiểu': (expTag.text() || '').trim() || null,
                     });
                 });
 
                 console.error(`   -> Đã thu thập ${jobListings.length} tin từ trang ${i}.`);
-                pagesUntilNextChange--;
+                pagesUntilNextChange--; // Giảm độ bền
                 
                 const betweenPagesDelay = randomDelay(3000, 7000);
                 await sleep(betweenPagesDelay);
 
             } catch (error) {
                 console.error(`   -> Lỗi khi xử lý trang ${i}: ${error.message}. Chuyển sang trang tiếp theo.`);
-                pagesUntilNextChange--;
+                pagesUntilNextChange--; // Vẫn trừ độ bền
                 continue;
             }
         }
@@ -222,6 +230,7 @@ async function loneChameleonScraper() {
         console.error('\nKhông có dữ liệu mới để tổng hợp.');
     }
     
+    // Gửi output cho GitHub Actions
     const output = `jobs_count=${jobsCount}\nfinal_filename=${finalFilename}\n`;
     fs.appendFileSync(process.env.GITHUB_OUTPUT, output);
 }
