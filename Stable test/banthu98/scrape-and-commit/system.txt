@@ -1,5 +1,0 @@
-2025-09-08T05:36:40.1790000Z Job is about to start running on the hosted runner: GitHub Actions 1000000953
-2025-09-08T05:36:40.1770000Z Requested labels: ubuntu-latest
-2025-09-08T05:36:40.1770000Z Job defined at: thiensang1/topcv-job-scraper/.github/workflows/scrape.yml@refs/heads/main
-2025-09-08T05:36:40.1770000Z Waiting for a runner to pick up this job...
-2025-09-08T05:36:40.1790000Z Job is waiting for a hosted runner to come online.
