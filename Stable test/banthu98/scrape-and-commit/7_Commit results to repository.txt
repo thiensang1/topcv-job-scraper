@@ -1,0 +1,19 @@
+﻿2025-09-08T06:27:25.4245053Z ##[group]Run # Đồng bộ hóa với các file dữ liệu cũ (nếu có) để tránh lỗi push
+2025-09-08T06:27:25.4245587Z [36;1m# Đồng bộ hóa với các file dữ liệu cũ (nếu có) để tránh lỗi push[0m
+2025-09-08T06:27:25.4246518Z [36;1mgit pull origin main --rebase[0m
+2025-09-08T06:27:25.4247003Z [36;1m[0m
+2025-09-08T06:27:25.4247262Z [36;1mgit config --global user.name 'GitHub Actions Scraper'[0m
+2025-09-08T06:27:25.4247693Z [36;1mgit config --global user.email 'actions@github.com'[0m
+2025-09-08T06:27:25.4248039Z [36;1mgit add data/topcv_ke-toan_08-09-2025.csv[0m
+2025-09-08T06:27:25.4248483Z [36;1mgit commit -m "📊 Dữ liệu TopCV: Thêm 4457 tin mới vào data/topcv_ke-toan_08-09-2025.csv"[0m
+2025-09-08T06:27:25.4248867Z [36;1mgit push[0m
+2025-09-08T06:27:25.4280123Z shell: /usr/bin/bash -e {0}
+2025-09-08T06:27:25.4280373Z ##[endgroup]
+2025-09-08T06:27:25.8955511Z From https://github.com/thiensang1/topcv-job-scraper
+2025-09-08T06:27:25.8956288Z  * branch            main       -> FETCH_HEAD
+2025-09-08T06:27:25.9036735Z Already up to date.
+2025-09-08T06:27:25.9503497Z [main c8a991b] 📊 Dữ liệu TopCV: Thêm 4457 tin mới vào data/topcv_ke-toan_08-09-2025.csv
+2025-09-08T06:27:25.9504100Z  1 file changed, 4458 insertions(+)
+2025-09-08T06:27:25.9504496Z  create mode 100644 data/topcv_ke-toan_08-09-2025.csv
+2025-09-08T06:27:26.6248088Z To https://github.com/thiensang1/topcv-job-scraper
+2025-09-08T06:27:26.6249124Z    5134382..c8a991b  main -> main

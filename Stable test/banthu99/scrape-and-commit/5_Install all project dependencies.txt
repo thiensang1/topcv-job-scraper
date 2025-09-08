@@ -1,0 +1,21 @@
+﻿2025-09-08T06:57:05.2812614Z ##[group]Run npm install
+2025-09-08T06:57:05.2812948Z [36;1mnpm install[0m
+2025-09-08T06:57:05.2929844Z shell: /usr/bin/bash -e {0}
+2025-09-08T06:57:05.2930125Z ##[endgroup]
+2025-09-08T06:57:08.1599694Z npm warn EBADENGINE Unsupported engine {
+2025-09-08T06:57:08.1600822Z npm warn EBADENGINE   package: 'cheerio@1.1.2',
+2025-09-08T06:57:08.1602181Z npm warn EBADENGINE   required: { node: '>=20.18.1' },
+2025-09-08T06:57:08.1603173Z npm warn EBADENGINE   current: { node: 'v18.20.8', npm: '10.8.2' }
+2025-09-08T06:57:08.1603933Z npm warn EBADENGINE }
+2025-09-08T06:57:08.6353796Z 
+2025-09-08T06:57:08.6354579Z up to date, audited 187 packages in 3s
+2025-09-08T06:57:08.6355039Z 
+2025-09-08T06:57:08.6355369Z 34 packages are looking for funding
+2025-09-08T06:57:08.6355905Z   run `npm fund` for details
+2025-09-08T06:57:08.6431351Z 
+2025-09-08T06:57:08.6431969Z 2 vulnerabilities (1 low, 1 moderate)
+2025-09-08T06:57:08.6432329Z 
+2025-09-08T06:57:08.6432585Z To address all issues, run:
+2025-09-08T06:57:08.6433053Z   npm audit fix
+2025-09-08T06:57:08.6433374Z 
+2025-09-08T06:57:08.6433591Z Run `npm audit` for details.

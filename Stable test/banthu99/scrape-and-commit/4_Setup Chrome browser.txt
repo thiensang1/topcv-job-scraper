@@ -1,0 +1,16 @@
+﻿2025-09-08T06:56:59.8769962Z ##[group]Run browser-actions/setup-chrome@latest
+2025-09-08T06:56:59.8770298Z with:
+2025-09-08T06:56:59.8770492Z   chrome-version: stable
+2025-09-08T06:56:59.8770726Z   install-dependencies: false
+2025-09-08T06:56:59.8770969Z   install-chromedriver: false
+2025-09-08T06:56:59.8771192Z   no-sudo: false
+2025-09-08T06:56:59.8771380Z ##[endgroup]
+2025-09-08T06:56:59.9537770Z Setup chrome stable
+2025-09-08T06:56:59.9542235Z Attempting to download chrome stable...
+2025-09-08T06:56:59.9988042Z Acquiring chrome stable from https://storage.googleapis.com/chrome-for-testing-public/140.0.7339.80/linux64/chrome-linux64.zip
+2025-09-08T06:57:01.3339844Z Installing chrome...
+2025-09-08T06:57:01.3376458Z [command]/usr/bin/unzip -o -q /home/runner/work/_temp/7c9668f0-631e-4022-95c8-80958b7f1efb
+2025-09-08T06:57:05.1425177Z Successfully Installed chrome to /opt/hostedtoolcache/setup-chrome/chrome/stable/x64
+2025-09-08T06:57:05.1437113Z [command]/opt/hostedtoolcache/setup-chrome/chrome/stable/x64/chrome --version
+2025-09-08T06:57:05.2503339Z Google Chrome for Testing 140.0.7339.80 
+2025-09-08T06:57:05.2677765Z Successfully setup chrome 140.0.7339.80

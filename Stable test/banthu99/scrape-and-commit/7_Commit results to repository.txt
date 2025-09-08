@@ -1,0 +1,14 @@
+﻿2025-09-08T07:49:15.0487726Z ##[group]Run # Đồng bộ hóa với các file dữ liệu cũ (nếu có) để tránh lỗi push
+2025-09-08T07:49:15.0488228Z [36;1m# Đồng bộ hóa với các file dữ liệu cũ (nếu có) để tránh lỗi push[0m
+2025-09-08T07:49:15.0488583Z [36;1mgit pull origin main --rebase[0m
+2025-09-08T07:49:15.0488836Z [36;1m[0m
+2025-09-08T07:49:15.0489085Z [36;1mgit config --global user.name 'GitHub Actions Scraper'[0m
+2025-09-08T07:49:15.0489671Z [36;1mgit config --global user.email 'actions@github.com'[0m
+2025-09-08T07:49:15.0490043Z [36;1mgit add data/topcv_ke-toan_08-09-2025.csv[0m
+2025-09-08T07:49:15.0490466Z [36;1mgit commit -m "📊 Dữ liệu TopCV: Thêm 4508 tin mới vào data/topcv_ke-toan_08-09-2025.csv"[0m
+2025-09-08T07:49:15.0490843Z [36;1mgit push[0m
+2025-09-08T07:49:15.0521544Z shell: /usr/bin/bash -e {0}
+2025-09-08T07:49:15.0522012Z ##[endgroup]
+2025-09-08T07:49:15.2433131Z error: cannot pull with rebase: You have unstaged changes.
+2025-09-08T07:49:15.2435298Z error: Please commit or stash them.
+2025-09-08T07:49:15.2454957Z ##[error]Process completed with exit code 128.

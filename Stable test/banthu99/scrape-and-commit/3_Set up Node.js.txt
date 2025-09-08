@@ -1,0 +1,23 @@
+﻿2025-09-08T06:56:55.8024596Z ##[group]Run actions/setup-node@v4
+2025-09-08T06:56:55.8024930Z with:
+2025-09-08T06:56:55.8025153Z   node-version: 18
+2025-09-08T06:56:55.8025384Z   cache: npm
+2025-09-08T06:56:55.8025606Z   always-auth: false
+2025-09-08T06:56:55.8025852Z   check-latest: false
+2025-09-08T06:56:55.8026224Z   token: ***
+2025-09-08T06:56:55.8026461Z ##[endgroup]
+2025-09-08T06:56:55.9766681Z Found in cache @ /opt/hostedtoolcache/node/18.20.8/x64
+2025-09-08T06:56:55.9772666Z ##[group]Environment details
+2025-09-08T06:56:57.8621240Z node: v18.20.8
+2025-09-08T06:56:57.8622235Z npm: 10.8.2
+2025-09-08T06:56:57.8623017Z yarn: 1.22.22
+2025-09-08T06:56:57.8624587Z ##[endgroup]
+2025-09-08T06:56:57.8648553Z [command]/opt/hostedtoolcache/node/18.20.8/x64/bin/npm config get cache
+2025-09-08T06:56:58.1302424Z /home/runner/.npm
+2025-09-08T06:56:58.4477375Z Cache hit for: node-cache-Linux-x64-npm-416e735b9ac2a76a2dd6b9ec1a6fe63cc3ce0bfa9ce4a61af4a52cdd46502d8f
+2025-09-08T06:56:59.8053017Z Received 1317494 of 5511798 (23.9%), 1.3 MBs/sec
+2025-09-08T06:56:59.8238003Z Received 5511798 of 5511798 (100.0%), 5.2 MBs/sec
+2025-09-08T06:56:59.8238989Z Cache Size: ~5 MB (5511798 B)
+2025-09-08T06:56:59.8268501Z [command]/usr/bin/tar -xf /home/runner/work/_temp/cc6aa4b9-0705-470b-a7ba-44043e768fc0/cache.tzst -P -C /home/runner/work/topcv-job-scraper/topcv-job-scraper --use-compress-program unzstd
+2025-09-08T06:56:59.8622472Z Cache restored successfully
+2025-09-08T06:56:59.8637860Z Cache restored from key: node-cache-Linux-x64-npm-416e735b9ac2a76a2dd6b9ec1a6fe63cc3ce0bfa9ce4a61af4a52cdd46502d8f

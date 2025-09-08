@@ -1,0 +1,43 @@
+﻿2025-09-08T05:36:42.5597290Z Current runner version: '2.328.0'
+2025-09-08T05:36:42.5622506Z ##[group]Runner Image Provisioner
+2025-09-08T05:36:42.5623337Z Hosted Compute Agent
+2025-09-08T05:36:42.5623975Z Version: 20250829.383
+2025-09-08T05:36:42.5624597Z Commit: 27cb235aab5b0e52e153a26cd86b4742e89dac5d
+2025-09-08T05:36:42.5625308Z Build Date: 2025-08-29T13:48:48Z
+2025-09-08T05:36:42.5626312Z ##[endgroup]
+2025-09-08T05:36:42.5627268Z ##[group]Operating System
+2025-09-08T05:36:42.5627850Z Ubuntu
+2025-09-08T05:36:42.5628459Z 24.04.3
+2025-09-08T05:36:42.5629042Z LTS
+2025-09-08T05:36:42.5629475Z ##[endgroup]
+2025-09-08T05:36:42.5630020Z ##[group]Runner Image
+2025-09-08T05:36:42.5630634Z Image: ubuntu-24.04
+2025-09-08T05:36:42.5631114Z Version: 20250831.1.0
+2025-09-08T05:36:42.5632197Z Included Software: https://github.com/actions/runner-images/blob/ubuntu24/20250831.1/images/ubuntu/Ubuntu2404-Readme.md
+2025-09-08T05:36:42.5633605Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu24%2F20250831.1
+2025-09-08T05:36:42.5634862Z ##[endgroup]
+2025-09-08T05:36:42.5637521Z ##[group]GITHUB_TOKEN Permissions
+2025-09-08T05:36:42.5639904Z Actions: write
+2025-09-08T05:36:42.5640525Z Attestations: write
+2025-09-08T05:36:42.5641062Z Checks: write
+2025-09-08T05:36:42.5641651Z Contents: write
+2025-09-08T05:36:42.5642144Z Deployments: write
+2025-09-08T05:36:42.5642714Z Discussions: write
+2025-09-08T05:36:42.5643278Z Issues: write
+2025-09-08T05:36:42.5643745Z Metadata: read
+2025-09-08T05:36:42.5644245Z Models: read
+2025-09-08T05:36:42.5644792Z Packages: write
+2025-09-08T05:36:42.5645283Z Pages: write
+2025-09-08T05:36:42.5645827Z PullRequests: write
+2025-09-08T05:36:42.5646412Z RepositoryProjects: write
+2025-09-08T05:36:42.5647294Z SecurityEvents: write
+2025-09-08T05:36:42.5647943Z Statuses: write
+2025-09-08T05:36:42.5648533Z ##[endgroup]
+2025-09-08T05:36:42.5650693Z Secret source: Actions
+2025-09-08T05:36:42.5651411Z Prepare workflow directory
+2025-09-08T05:36:42.5981234Z Prepare all required actions
+2025-09-08T05:36:42.6020633Z Getting action download info
+2025-09-08T05:36:42.9653400Z Download action repository 'actions/checkout@v4' (SHA:08eba0b27e820071cde6df949e0beb9ba4906955)
+2025-09-08T05:36:43.1235273Z Download action repository 'actions/setup-node@v4' (SHA:49933ea5288caeca8642d1e84afbd3f7d6820020)
+2025-09-08T05:36:43.2229928Z Download action repository 'browser-actions/setup-chrome@latest' (SHA:b94431e051d1c52dcbe9a7092a4f10f827795416)
+2025-09-08T05:36:43.8290883Z Complete job name: scrape-and-commit

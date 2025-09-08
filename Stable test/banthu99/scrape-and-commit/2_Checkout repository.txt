@@ -1,0 +1,73 @@
+﻿2025-09-08T06:56:54.0232037Z ##[group]Run actions/checkout@v4
+2025-09-08T06:56:54.0232952Z with:
+2025-09-08T06:56:54.0233355Z   fetch-depth: 0
+2025-09-08T06:56:54.0233828Z   repository: thiensang1/topcv-job-scraper
+2025-09-08T06:56:54.0234525Z   token: ***
+2025-09-08T06:56:54.0234924Z   ssh-strict: true
+2025-09-08T06:56:54.0235337Z   ssh-user: git
+2025-09-08T06:56:54.0235757Z   persist-credentials: true
+2025-09-08T06:56:54.0236211Z   clean: true
+2025-09-08T06:56:54.0236630Z   sparse-checkout-cone-mode: true
+2025-09-08T06:56:54.0237125Z   fetch-tags: false
+2025-09-08T06:56:54.0237552Z   show-progress: true
+2025-09-08T06:56:54.0237970Z   lfs: false
+2025-09-08T06:56:54.0238354Z   submodules: false
+2025-09-08T06:56:54.0238778Z   set-safe-directory: true
+2025-09-08T06:56:54.0239430Z ##[endgroup]
+2025-09-08T06:56:54.1345567Z Syncing repository: thiensang1/topcv-job-scraper
+2025-09-08T06:56:54.1347997Z ##[group]Getting Git version info
+2025-09-08T06:56:54.1348869Z Working directory is '/home/runner/work/topcv-job-scraper/topcv-job-scraper'
+2025-09-08T06:56:54.1349996Z [command]/usr/bin/git version
+2025-09-08T06:56:54.1427053Z git version 2.51.0
+2025-09-08T06:56:54.1455646Z ##[endgroup]
+2025-09-08T06:56:54.1473484Z Temporarily overriding HOME='/home/runner/work/_temp/956ed137-a513-47d0-b484-fbc53c257747' before making global git config changes
+2025-09-08T06:56:54.1475680Z Adding repository directory to the temporary git global config as a safe directory
+2025-09-08T06:56:54.1480829Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/topcv-job-scraper/topcv-job-scraper
+2025-09-08T06:56:54.1531171Z Deleting the contents of '/home/runner/work/topcv-job-scraper/topcv-job-scraper'
+2025-09-08T06:56:54.1535772Z ##[group]Initializing the repository
+2025-09-08T06:56:54.1540597Z [command]/usr/bin/git init /home/runner/work/topcv-job-scraper/topcv-job-scraper
+2025-09-08T06:56:54.1625711Z hint: Using 'master' as the name for the initial branch. This default branch name
+2025-09-08T06:56:54.1627589Z hint: is subject to change. To configure the initial branch name to use in all
+2025-09-08T06:56:54.1629014Z hint: of your new repositories, which will suppress this warning, call:
+2025-09-08T06:56:54.1629897Z hint:
+2025-09-08T06:56:54.1630708Z hint: 	git config --global init.defaultBranch <name>
+2025-09-08T06:56:54.1631449Z hint:
+2025-09-08T06:56:54.1632386Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+2025-09-08T06:56:54.1633386Z hint: 'development'. The just-created branch can be renamed via this command:
+2025-09-08T06:56:54.1634201Z hint:
+2025-09-08T06:56:54.1634685Z hint: 	git branch -m <name>
+2025-09-08T06:56:54.1635226Z hint:
+2025-09-08T06:56:54.1636167Z hint: Disable this message with "git config set advice.defaultBranchName false"
+2025-09-08T06:56:54.1637392Z Initialized empty Git repository in /home/runner/work/topcv-job-scraper/topcv-job-scraper/.git/
+2025-09-08T06:56:54.1642580Z [command]/usr/bin/git remote add origin https://github.com/thiensang1/topcv-job-scraper
+2025-09-08T06:56:54.1689650Z ##[endgroup]
+2025-09-08T06:56:54.1690824Z ##[group]Disabling automatic garbage collection
+2025-09-08T06:56:54.1694114Z [command]/usr/bin/git config --local gc.auto 0
+2025-09-08T06:56:54.1724868Z ##[endgroup]
+2025-09-08T06:56:54.1726047Z ##[group]Setting up auth
+2025-09-08T06:56:54.1732876Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2025-09-08T06:56:54.1765735Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2025-09-08T06:56:54.2087516Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2025-09-08T06:56:54.2119789Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2025-09-08T06:56:54.2341233Z [command]/usr/bin/git config --local http.https://github.com/.extraheader AUTHORIZATION: basic ***
+2025-09-08T06:56:54.2377103Z ##[endgroup]
+2025-09-08T06:56:54.2378361Z ##[group]Fetching the repository
+2025-09-08T06:56:54.2387532Z [command]/usr/bin/git -c protocol.version=2 fetch --prune --no-recurse-submodules origin +refs/heads/*:refs/remotes/origin/* +refs/tags/*:refs/tags/*
+2025-09-08T06:56:55.4088529Z From https://github.com/thiensang1/topcv-job-scraper
+2025-09-08T06:56:55.4089585Z  * [new branch]      main       -> origin/main
+2025-09-08T06:56:55.4126599Z [command]/usr/bin/git branch --list --remote origin/main
+2025-09-08T06:56:55.4148924Z   origin/main
+2025-09-08T06:56:55.4159117Z [command]/usr/bin/git rev-parse refs/remotes/origin/main
+2025-09-08T06:56:55.4178355Z c8a991be0258ebba5dd92948ffca354fdc9e1b03
+2025-09-08T06:56:55.4183927Z ##[endgroup]
+2025-09-08T06:56:55.4184421Z ##[group]Determining the checkout info
+2025-09-08T06:56:55.4185297Z ##[endgroup]
+2025-09-08T06:56:55.4189141Z [command]/usr/bin/git sparse-checkout disable
+2025-09-08T06:56:55.4227233Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+2025-09-08T06:56:55.4251914Z ##[group]Checking out the ref
+2025-09-08T06:56:55.4255434Z [command]/usr/bin/git checkout --progress --force -B main refs/remotes/origin/main
+2025-09-08T06:56:55.7724027Z Switched to a new branch 'main'
+2025-09-08T06:56:55.7725770Z branch 'main' set up to track 'origin/main'.
+2025-09-08T06:56:55.7744041Z ##[endgroup]
+2025-09-08T06:56:55.7783253Z [command]/usr/bin/git log -1 --format=%H
+2025-09-08T06:56:55.7805878Z c8a991be0258ebba5dd92948ffca354fdc9e1b03
