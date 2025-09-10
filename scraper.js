@@ -1,5 +1,5 @@
-// --- ĐIỆP VIÊN ĐƠN ĐỘC (SCRAPER) - PHIÊN BẢN TỐI THƯỢNG ---
-// Cập nhật: Tích hợp logic "Quan sát Kiên nhẫn" vào "Điệp viên Tắc kè hoa".
+// --- ĐIỆP VIÊN ĐƠN ĐỘC (SCRAPER) - PHIÊN BẢN NÂNG CAO ---
+// Cập nhật: Tích hợp hàm chuyển đổi ngày tháng thông minh.
 
 const puppeteer = require('puppeteer-extra');
 const StealthPlugin = require('puppeteer-extra-plugin-stealth');
@@ -30,6 +30,59 @@ function buildUrl(keyword, page) {
     }
 }
 
+// --- "VŨ KHÍ" MỚI: "PHIÊN DỊCH VIÊN" THÔNG THÁI ---
+/**
+ * Chuyển đổi chuỗi thời gian tương đối (ví dụ: "2 ngày trước") thành định dạng YYYY-MM-DD.
+ * @param {string} timeString - Chuỗi thời gian đầu vào.
+ * @returns {string|null} Ngày tháng ở định dạng YYYY-MM-DD hoặc null.
+ */
+function convertPostTimeToDate(timeString) {
+    if (!timeString) return null;
+    const now = new Date();
+    // Giả định múi giờ Việt Nam cho các tính toán để đảm bảo ngày là chính xác
+    now.setHours(now.getHours() + 7); 
+
+    const normalizedString = timeString.toLowerCase().trim();
+
+    if (normalizedString.includes('hôm qua')) {
+        now.setDate(now.getDate() - 1);
+    } else if (normalizedString.includes('hôm kia')) {
+        now.setDate(now.getDate() - 2);
+    } else if (normalizedString.includes('ngày trước')) {
+        const daysMatch = normalizedString.match(/\d+/);
+        if (daysMatch) {
+            const days = parseInt(daysMatch[0], 10);
+            if (!isNaN(days)) now.setDate(now.getDate() - days);
+        }
+    } else if (normalizedString.includes('tuần trước')) {
+        const weeksMatch = normalizedString.match(/\d+/);
+        if (weeksMatch) {
+            const weeks = parseInt(weeksMatch[0], 10);
+            if (!isNaN(weeks)) now.setDate(now.getDate() - (weeks * 7));
+        }
+    } else if (normalizedString.includes('tháng trước')) {
+        const monthsMatch = normalizedString.match(/\d+/);
+        if (monthsMatch) {
+            const months = parseInt(monthsMatch[0], 10);
+            if (!isNaN(months)) now.setMonth(now.getMonth() - months);
+        }
+    } else if (normalizedString.includes('năm trước')) {
+        const yearsMatch = normalizedString.match(/\d+/);
+        if (yearsMatch) {
+            const years = parseInt(yearsMatch[0], 10);
+            if (!isNaN(years)) now.setFullYear(now.getFullYear() - years);
+        }
+    } else if (/^\d{1,2}-\d{1,2}-\d{4}$/.test(normalizedString)) {
+        const parts = normalizedString.split('-');
+        if (parts.length === 3) {
+            // Chuẩn hóa thành YYYY-MM-DD
+            return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+        }
+    }
+    // Đối với "Vài giờ trước", "Vài phút trước",... nó sẽ trả về ngày hôm nay
+    return now.toISOString().split('T')[0];
+}
+
 // --- HÀM LẤY PROXY ---
 async function getProxy(apiKey, apiEndpoint) {
     if (!apiKey || !apiEndpoint) {
@@ -37,7 +90,7 @@ async function getProxy(apiKey, apiEndpoint) {
         return null;
     }
     try {
-        console.error("-> [Điệp viên] Đang yêu cầu một danh tính proxy MỚI từ API...");
+        console.error("-> [Điệp viên] Đang yêu cầu một danh tính proxy mới từ API...");
         const response = await axios.get(apiEndpoint, {
             params: { key: apiKey, region: 'random' },
             timeout: 20000
@@ -80,23 +133,41 @@ async function discoverTotalPages(page) {
     return lastKnownGoodPage;
 }
 
-// --- HÀM KHỞI TẠO TRÌNH DUYỆT ---
-async function initializeBrowser(proxy, chromePath) {
+// --- HÀM KHỞI TẠO VÀ "LÀM NÓNG" TRÌNH DUYỆT ---
+async function initializeAndWarmUpBrowser(proxy, chromePath) {
      if (!proxy) throw new Error("Không có proxy để khởi tạo trình duyệt.");
-     const browserArgs = ['--no-sandbox', '--disable-setuid-sandbox', `--proxy-server=${proxy.host}:${proxy.port}`];
-    console.error(`\n[Điệp viên] Đang khởi tạo trình duyệt với danh tính ${proxy.host}...`);
-    return await puppeteer.launch({
+     const browserArgs = [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        `--proxy-server=${proxy.host}:${proxy.port}`,
+    ];
+    console.error(`\n[Điệp viên] Đang khởi tạo trình duyệt MỚI với danh tính ${proxy.host}...`);
+    const browser = await puppeteer.launch({
         headless: true,
         executablePath: chromePath,
         args: browserArgs,
         ignoreHTTPSErrors: true,
         timeout: BROWSER_TIMEOUT
     });
+    const page = await browser.newPage();
+    try {
+        console.error("   -> [Làm nóng] Bắt đầu 'nghi thức chào hỏi'...");
+        await page.goto("https://www.topcv.vn/", { waitUntil: 'networkidle2', timeout: 45000 });
+        await sleep(randomDelay(2000, 4000));
+        await page.mouse.move(randomDelay(100, 500), randomDelay(100, 500));
+        await page.evaluate(() => window.scrollBy(0, randomDelay(100, 300)));
+        console.error("   -> [Làm nóng] 'Nghi thức chào hỏi' hoàn tất. Phiên làm việc đã được tin cậy.");
+    } catch (e) {
+        console.error(`   -> [Làm nóng] Gặp lỗi nhỏ khi làm nóng: ${e.message}. Vẫn tiếp tục nhiệm vụ.`);
+    } finally {
+        await page.close();
+    }
+    return browser;
 }
 
-// --- HÀM CHÍNH: "ĐIỆP VIÊN TỐI THƯỢNG" ---
-async function ultimateScraper() {
-    console.error("--- CHIẾN DỊCH 'ĐIỆP VIÊN TỐI THƯỢNG' BẮT ĐẦU ---");
+// --- HÀM CHÍNH: "ĐIỆP VIÊN LỊCH THIỆP" ---
+async function politeScraper() {
+    console.error("--- CHIẾN DỊCH 'ĐIỆP VIÊN LỊCH THIỆP' BẮT ĐẦU ---");
     let browser;
     const allJobs = [];
     let jobsCount = 0;
@@ -109,19 +180,15 @@ async function ultimateScraper() {
         }
 
         let proxy = await getProxy(process.env.PROXY_API_KEY, process.env.PROXY_API_ENDPOINT);
-        browser = await initializeBrowser(proxy, CHROME_EXECUTABLE_PATH);
+        browser = await initializeAndWarmUpBrowser(proxy, CHROME_EXECUTABLE_PATH);
 
         let page = await browser.newPage();
         await page.setViewport({ width: 1920, height: 1080 });
 
         const totalPages = await discoverTotalPages(page);
         
-        const initialDelay = randomDelay(10000, 13500);
-        console.error(`\n[Điệp viên] Do thám hoàn tất. Tạm nghỉ ${(initialDelay / 1000).toFixed(2)} giây...`);
-        await sleep(initialDelay);
-
-        let pagesUntilNextChange = randomDelay(10, 30);
-        console.error(`[Điệp viên] Độ bền nhân dạng ban đầu: ${pagesUntilNextChange} trang.`);
+        let pagesUntilNextChange = randomDelay(20, 40);
+        console.error(`\n[Điệp viên] Độ bền nhân dạng ban đầu: ${pagesUntilNextChange} trang.`);
 
         console.error("\n--- [Điệp viên] Bắt đầu giai đoạn KHAI THÁC ---");
         for (let i = 1; i <= totalPages; i++) {
@@ -130,10 +197,10 @@ async function ultimateScraper() {
                 console.error(`\n   -> [Điệp viên] Hết độ bền nhân dạng. Bắt đầu "biến hình"...`);
                 await browser.close();
                 proxy = await getProxy(process.env.PROXY_API_KEY, process.env.PROXY_API_ENDPOINT);
-                browser = await initializeBrowser(proxy, CHROME_EXECUTABLE_PATH);
+                browser = await initializeAndWarmUpBrowser(proxy, CHROME_EXECUTABLE_PATH);
                 page = await browser.newPage();
                 await page.setViewport({ width: 1920, height: 1080 });
-                pagesUntilNextChange = randomDelay(10, 30);
+                pagesUntilNextChange = randomDelay(20, 40);
                 console.error(`   -> [Điệp viên] "Biến hình" thành công. Độ bền nhân dạng mới: ${pagesUntilNextChange} trang.`);
             }
 
@@ -142,36 +209,10 @@ async function ultimateScraper() {
 
             try {
                 await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: PAGE_LOAD_TIMEOUT });
-                
-                // --- LOGIC MỚI: "QUAN SÁT KIÊN NHẪN" ---
                 const jobListSelector = 'div.job-list-search-result';
-                console.error("      -> Bắt đầu giai đoạn 'quan sát' để chờ trang ổn định...");
-                await page.waitForSelector(jobListSelector, { timeout: 30000 }); // Chờ bộ khung xuất hiện
+                await page.waitForSelector(jobListSelector, { timeout: 30000 });
                 
-                let previousHtml = '', currentHtml = '', stabilityCounter = 0;
-                const requiredStableChecks = 2;
-
-                for (let check = 0; check < 15; check++) {
-                    currentHtml = await page.$eval(jobListSelector, element => element.innerHTML);
-                    if (currentHtml.replace(/\s/g, '') === previousHtml.replace(/\s/g, '') && currentHtml.length > 100) {
-                        stabilityCounter++;
-                        console.error(`         - Trang đã ổn định (lần ${stabilityCounter}/${requiredStableChecks})...`);
-                        if (stabilityCounter >= requiredStableChecks) break;
-                    } else {
-                        stabilityCounter = 0;
-                    }
-                    previousHtml = currentHtml;
-                    await sleep(2000);
-                }
-                
-                if (stabilityCounter < requiredStableChecks) {
-                    throw new Error("Trang không ổn định, có thể đã bị chặn hoặc không có nội dung.");
-                }
-                console.error("      -> Trang đã ổn định. Dữ liệu chi tiết đã được tải.");
-
-                console.error("      -> Mô phỏng hành vi cuộn trang...");
-                await page.evaluate(() => { window.scrollBy(0, document.body.scrollHeight); });
-                await sleep(randomDelay(500, 1000));
+                await sleep(2000);
                 
                 const content = await page.content();
                 const $ = cheerio.load(content);
@@ -198,16 +239,25 @@ async function ultimateScraper() {
                         if (nextNode && nextNode.type === 'text') dateText = nextNode.data.trim();
                     }
                     
+                    // --- ÁP DỤNG "VŨ KHÍ" MỚI ---
+                    const convertedDate = convertPostTimeToDate(dateText);
+
                     allJobs.push({
-                        'keyword': TARGET_KEYWORD, 'title': titleTag.text().trim() || null, 'link': titleTag.attr('href') ? `https://www.topcv.vn${titleTag.attr('href')}` : null, 'company': companyText, 'salary': salaryTag.text().trim() || 'Thỏa thuận', 'Nơi làm việc': locationTag.text().trim() || null, 'thời gian đăng': dateText, 'Kinh nghiệm làm việc tối thiểu': (expTag.text() || '').trim() || null,
+                        'keyword': TARGET_KEYWORD,
+                        'title': titleTag.text().trim() || null,
+                        'link': titleTag.attr('href') ? `https://www.topcv.vn${titleTag.attr('href')}` : null,
+                        'company': companyText,
+                        'salary': salaryTag.text().trim() || 'Thỏa thuận',
+                        'Nơi làm việc': locationTag.text().trim() || null,
+                        'thời gian đăng': convertedDate, // <-- SỬ DỤNG NGÀY ĐÃ ĐƯỢC CHUYỂN ĐỔI
+                        'Kinh nghiệm làm việc tối thiểu': (expTag.text() || '').trim() || null,
                     });
                 });
 
                 console.error(`   -> Đã thu thập ${jobListings.length} tin từ trang ${i}.`);
                 pagesUntilNextChange--;
                 
-                const betweenPagesDelay = randomDelay(18000, 25000);
-                await sleep(betweenPagesDelay);
+                await sleep(randomDelay(3000, 7000));
 
             } catch (error) {
                 console.error(`   -> Lỗi khi xử lý trang ${i}: ${error.message}. Chuyển sang trang tiếp theo.`);
@@ -241,6 +291,6 @@ async function ultimateScraper() {
     fs.appendFileSync(process.env.GITHUB_OUTPUT, output);
 }
 
-// Bắt đầu chiến dịch
-ultimateScraper();
+// Đổi tên hàm chạy chính
+politeScraper();
 
