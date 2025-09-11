@@ -1,5 +1,5 @@
 // Mã nguồn gốc từ: https://github.com/thiensang1/topcv-job-scraper
-// Đã được bổ sung chức năng convertPostTimeToDate theo yêu cầu.
+// Đã được bổ sung chức năng convertPostTimeToDate và sửa lỗi chạy trên GitHub Actions.
 
 const puppeteer = require('puppeteer');
 const cheerio = require('cheerio');
@@ -13,7 +13,6 @@ const PAGES_PER_KEYWORD = 200; // Giới hạn số trang quét cho mỗi từ k
 function convertPostTimeToDate(timeString) {
     if (!timeString) return null;
     const now = new Date();
-    // Chuẩn hóa chuỗi đầu vào
     const normalizedString = timeString.toLowerCase().trim();
 
     if (normalizedString.includes('hôm qua')) {
@@ -33,13 +32,10 @@ function convertPostTimeToDate(timeString) {
         const years = parseInt(normalizedString.match(/\d+/)[0]);
         if (!isNaN(years)) now.setFullYear(now.getFullYear() - years);
     } else if (/^\d{1,2}-\d{1,2}-\d{4}$/.test(normalizedString)) {
-        // Xử lý định dạng dd-mm-yyyy
         const parts = normalizedString.split('-');
         return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
     }
     
-    // Nếu không khớp các trường hợp trên (ví dụ: "hôm nay"), trả về ngày hiện tại
-    // Định dạng lại theo chuẩn YYYY-MM-DD
     return now.toISOString().split('T')[0];
 }
 // --- KẾT THÚC HÀM ĐƯỢC BỔ SUNG ---
@@ -47,7 +43,17 @@ function convertPostTimeToDate(timeString) {
 
 async function scrapeTopCVByKeyword(keyword, pageNum) {
     const base_url = "https://www.topcv.vn";
-    const browser = await puppeteer.launch({ headless: true });
+    
+    // --- THAY ĐỔI ĐỂ CHẠY TRÊN GITHUB ACTIONS ---
+    const browser = await puppeteer.launch({
+        headless: true,
+        args: [
+            '--no-sandbox',
+            '--disable-setuid-sandbox'
+        ]
+    });
+    // --- KẾT THÚC THAY ĐỔI ---
+
     const page = await browser.newPage();
 
     let targetUrl;
@@ -72,12 +78,8 @@ async function scrapeTopCVByKeyword(keyword, pageNum) {
         const salary = $(element).find('label.title-salary').text().trim();
         const location = $(element).find('label.address').text().trim();
         
-        // --- THAY ĐỔI TRONG PHẦN TRÍCH XUẤT ---
-        // Lấy chuỗi thời gian gốc
         const rawTime = $(element).find('span.time').text().trim();
-        // Chuyển đổi sang định dạng YYYY-MM-DD
         const postDate = convertPostTimeToDate(rawTime);
-        // --- KẾT THÚC THAY ĐỔI ---
 
         processedJobs.push({
             'keyword': keyword,
@@ -86,7 +88,7 @@ async function scrapeTopCVByKeyword(keyword, pageNum) {
             'company': company,
             'salary': salary,
             'location': location,
-            'thời gian đăng': postDate, // Sử dụng ngày đã được định dạng
+            'thời gian đăng': postDate,
         });
     });
 
@@ -110,10 +112,9 @@ async function scrapeTopCVByKeyword(keyword, pageNum) {
 
     if (allResults.length > 0) {
         const csvData = stringify(allResults, { header: true });
-        fs.writeFileSync('topcv_jobs.csv', '\ufeff' + csvData); // Thêm BOM để Excel đọc UTF-8
+        fs.writeFileSync('topcv_jobs.csv', '\ufeff' + csvData);
         console.log(`Đã quét xong! Lưu ${allResults.length} việc làm vào file topcv_jobs.csv`);
     } else {
         console.log('Không quét được dữ liệu nào.');
     }
 })();
-
