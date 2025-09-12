@@ -13,7 +13,10 @@ jobs:
   # --- MỘT JOB DUY NHẤT ĐỂ THỰC HIỆN TOÀN BỘ "CHIẾN DỊCH" ---
   scrape-and-commit:
     runs-on: ubuntu-latest
-    
+  # --- PHẦN NÀY ĐỂ CẤP QUYỀN GHI ---
+    permissions:
+      contents: write
+   
     steps:
       # --- GIAI ĐOẠN 1: CHUẨN BỊ "CĂN CỨ" ---
       - name: 'Checkout repository'
