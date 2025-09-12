@@ -6,7 +6,7 @@ name: 'TopCV Daily Scraper'
 on:
   schedule:
  # Chạy 4 lần mỗi ngày (7h, 13h, 19h, 1h sáng VN)
-    - cron: '0 0,6,12,18 * * *'
+    - cron: '0 0,5,10,15 * * *'
   workflow_dispatch:
 
 jobs:
