@@ -37,6 +37,12 @@ jobs:
       - name: 'Install all project dependencies'
         run: npm install
 
+      # --- BƯỚC ĐƯỢC THÊM VÀO ĐỂ TẠO THƯ MỤC ---
+      - name: Create data directory
+        run: mkdir -p data
+      # --- KẾT THÚC ---
+      
+
       # --- GIAI ĐOẠN 2: TRIỂN KHAI "ĐIỆP VIÊN" ---
       - name: 'Run Lone Wolf Scraper'
         id: run_scraper
