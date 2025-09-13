@@ -285,7 +285,12 @@ async function ultimateScraper() {
     }
 
     if (allJobs.length > 0) {
-        const date = new Date().toLocaleString('vi-VN', {year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Asia/Ho_Chi_Minh'}).replace(', ', '_').replace(/\//g, '-').replace(/:/g, '-');
+        const date = new Date().toLocaleString('vi-VN', {
+            year: 'numeric', month: '2-digit', day: '2-digit',
+            hour: '2-digit', minute: '2-digit', hour12: false,
+            timeZone: 'Asia/Ho_Chi_Minh'
+        }).replace(', ', '_').replace(/\//g, '-').replace(/:/g, '-');
+        
         finalFilename = `data/topcv_${TARGET_KEYWORD}_${date}.csv`;
         jobsCount = allJobs.length;
         
