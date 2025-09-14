@@ -1,5 +1,5 @@
 // --- ĐIỆP VIÊN ĐƠN ĐỘC (SCRAPER) - PHIÊN BẢN TỐI THƯỢỢNG ---
-// Cập nhật: Tích hợp logic "Quan sát Kiên nhẫn" vào "Điệp viên Tắc kè hoa".
+// Cập nhật: Tích hợp 3 kịch bản KHAI THÁC DỮ LIỆU ngẫu nhiên trên từng trang.
 
 const puppeteer = require('puppeteer-extra');
 const StealthPlugin = require('puppeteer-extra-plugin-stealth');
@@ -11,7 +11,7 @@ const axios = require('axios');
 puppeteer.use(StealthPlugin());
 
 // --- CẤU HÌNH ---
-const TARGET_KEYWORD = "ke-toan"; 
+const TARGET_KEYWORD = "ke-to-an"; 
 const BROWSER_TIMEOUT = 120000;
 const PAGE_LOAD_TIMEOUT = 60000;
 const MAX_PAGES_TO_CHECK = 200; 
@@ -20,17 +20,14 @@ const MAX_PAGES_TO_CHECK = 200;
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 const randomDelay = (min, max) => Math.floor(Math.random() * (max - min + 1) + min);
 
-// --- HÀM CONVERT NGÀY THÁNG ĐƯỢC BỔ SUNG ---
 function convertPostTimeToDate(timeString) {
+    // ... (Hàm này giữ nguyên)
     if (!timeString) return null;
     const now = new Date();
     const normalizedString = timeString.toLowerCase().trim();
-
-    if (normalizedString.includes('hôm qua')) {
-        now.setDate(now.getDate() - 1);
-    } else if (normalizedString.includes('hôm kia')) {
-        now.setDate(now.getDate() - 2);
-    } else if (normalizedString.includes('ngày trước')) {
+    if (normalizedString.includes('hôm qua')) { now.setDate(now.getDate() - 1); } 
+    else if (normalizedString.includes('hôm kia')) { now.setDate(now.getDate() - 2); } 
+    else if (normalizedString.includes('ngày trước')) {
         const days = parseInt(normalizedString.match(/\d+/)[0]);
         if (!isNaN(days)) now.setDate(now.getDate() - days);
     } else if (normalizedString.includes('tuần trước')) {
@@ -46,23 +43,21 @@ function convertPostTimeToDate(timeString) {
         const parts = normalizedString.split('-');
         return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
     }
-    // Trả về ngày đã được tính toán theo định dạng YYYY-MM-DD
     return now.toISOString().split('T')[0];
 }
-// --- KẾT THÚC HÀM BỔ SUNG ---
 
-// --- HÀM XÂY DỰNG URL ---
 function buildUrl(keyword, page) {
+    // ... (Hàm này giữ nguyên)
     const BASE_URL = "https://www.topcv.vn";
-    if (keyword === 'ke-toan') {
+    if (keyword === 'ke-to-an') {
         return `${BASE_URL}/tim-viec-lam-ke-toan-cr392cb393?type_keyword=1&page=${page}&category_family=r392~b393`;
     } else {
         return `${BASE_URL}/tim-viec-lam-${keyword}?type_keyword=1&page=${page}&sba=1`;
     }
 }
 
-// --- HÀM LẤY PROXY ---
 async function getProxy(apiKey, apiEndpoint) {
+    // ... (Hàm này giữ nguyên)
     if (!apiKey || !apiEndpoint) {
         console.error("Cảnh báo: Không có thông tin API Proxy. Chạy không cần proxy.");
         return null;
@@ -85,36 +80,89 @@ async function getProxy(apiKey, apiEndpoint) {
     }
 }
 
-// --- HÀM DO THÁM ---
-async function discoverTotalPages(page) {
+// --- CÁC KỊCH BẢN DO THÁM ---
+async function discoverPagesLinearly(page) { /* ... (Giữ nguyên) ... */ 
     let lastKnownGoodPage = 1;
-    console.error("\n--- [Điệp viên] Bắt đầu giai đoạn DO THÁM ---");
     for (let i = 1; i <= MAX_PAGES_TO_CHECK; i++) {
         const targetUrl = buildUrl(TARGET_KEYWORD, i);
-        console.error(`   -> Đang thám hiểm trang ${i}...`);
+        console.error(`   -> [Tuần tự] Đang thám hiểm trang ${i}...`);
         try {
             await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: PAGE_LOAD_TIMEOUT });
             const currentUrl = page.url();
             const urlParams = new URLSearchParams(new URL(currentUrl).search);
             const actualPage = parseInt(urlParams.get('page') || '1', 10);
             if (actualPage < i) {
-                console.error(`   -> Đã đến rìa thế giới! Bị đưa về trang ${actualPage} khi cố gắng đến trang ${i}.`);
+                console.error(`   -> [Tuần tự] Bị đưa về trang ${actualPage}. Đã đến trang cuối.`);
                 break;
             }
             lastKnownGoodPage = i;
         } catch (error) {
-             console.error(`   -> Gặp lỗi khi thám hiểm trang ${i}: ${error.message}. Coi như đã đến trang cuối.`);
+             console.error(`   -> [Tuần tự] Gặp lỗi khi thám hiểm trang ${i}. Coi như đã đến trang cuối.`);
              break;
         }
     }
-    console.error(`[Điệp viên] Báo cáo tình báo: Phát hiện có tổng cộng ${lastKnownGoodPage} trang.`);
     return lastKnownGoodPage;
 }
-
-// --- HÀM KHỞI TẠO TRÌNH DUYỆT ---
-async function initializeBrowser(proxy, chromePath) {
-     if (!proxy) throw new Error("Không có proxy để khởi tạo trình duyệt.");
-     const browserArgs = ['--no-sandbox', '--disable-setuid-sandbox', `--proxy-server=${proxy.host}:${proxy.port}`];
+async function discoverPagesInReverse(page) { /* ... (Giữ nguyên) ... */ 
+    for (let i = MAX_PAGES_TO_CHECK; i >= 1; i--) {
+        const targetUrl = buildUrl(TARGET_KEYWORD, i);
+        console.error(`   -> [Đảo ngược] Đang kiểm tra từ trang ${i}...`);
+        try {
+            await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: PAGE_LOAD_TIMEOUT });
+            const content = await page.content();
+            const $ = cheerio.load(content);
+            const currentUrl = page.url();
+            const urlParams = new URLSearchParams(new URL(currentUrl).search);
+            const actualPage = parseInt(urlParams.get('page') || '1', 10);
+            if (actualPage >= i && $('div[class*="job-item"]').length > 0) {
+                console.error(`   -> [Đảo ngược] Trang ${i} hợp lệ. Đây là trang cuối cùng.`);
+                return i;
+            }
+        } catch (error) {
+             console.error(`   -> [Đảo ngược] Gặp lỗi khi kiểm tra trang ${i}, tiếp tục lùi...`);
+             continue;
+        }
+    }
+    return 1;
+}
+async function discoverPagesByBinarySearch(page) { /* ... (Giữ nguyên) ... */ 
+    let low = 1, high = MAX_PAGES_TO_CHECK, lastGood = 1;
+    while (low <= high) {
+        const mid = Math.floor(low + (high - low) / 2);
+        if (mid === 0) break;
+        const targetUrl = buildUrl(TARGET_KEYWORD, mid);
+        console.error(`   -> [Nhị phân] Đang kiểm tra trang ${mid} (trong khoảng ${low}-${high})...`);
+        try {
+            await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: PAGE_LOAD_TIMEOUT });
+            const currentUrl = page.url();
+            const urlParams = new URLSearchParams(new URL(currentUrl).search);
+            const actualPage = parseInt(urlParams.get('page') || '1', 10);
+            if (actualPage >= mid) {
+                console.error(`      -> Trang ${mid} tồn tại. Tìm kiếm ở nửa trên.`);
+                lastGood = mid;
+                low = mid + 1;
+            } else {
+                 console.error(`      -> Trang ${mid} không tồn tại. Tìm kiếm ở nửa dưới.`);
+                high = mid - 1;
+            }
+        } catch (error) {
+            console.error(`      -> Gặp lỗi ở trang ${mid}. Tìm kiếm ở nửa dưới.`);
+            high = mid - 1;
+        }
+    }
+    return lastGood;
+}
+async function discoverTotalPages(page) { /* ... (Giữ nguyên) ... */ 
+    const strategies = [discoverPagesInReverse, discoverPagesLinearly, discoverPagesByBinarySearch];
+    const selectedStrategy = strategies[Math.floor(Math.random() * strategies.length)];
+    console.error(`\n--- [Điệp viên] Bắt đầu giai đoạn DO THÁM bằng chiến thuật ngẫu nhiên: "${selectedStrategy.name}" ---`);
+    const totalPages = await selectedStrategy(page);
+    console.error(`[Điệp viên] Báo cáo tình báo: Phát hiện có tổng cộng ${totalPages} trang.`);
+    return totalPages;
+}
+async function initializeBrowser(proxy, chromePath) { /* ... (Giữ nguyên) ... */ 
+    if (!proxy) throw new Error("Không có proxy để khởi tạo trình duyệt.");
+    const browserArgs = ['--no-sandbox', '--disable-setuid-sandbox', `--proxy-server=${proxy.host}:${proxy.port}`];
     console.error(`\n[Điệp viên] Đang khởi tạo trình duyệt với danh tính ${proxy.host}...`);
     return await puppeteer.launch({
         headless: true,
@@ -125,9 +173,45 @@ async function initializeBrowser(proxy, chromePath) {
     });
 }
 
-// --- HÀM CHÍNH: "ĐIỆP VIÊN TỐI THƯỢNG" ---
+// --- CÁC CHIẾN THUẬT KHAI THÁC DỮ LIỆU ---
+// Chiến thuật 1: Cuộn toàn diện (cách cũ)
+async function collectDataByFullScroll(page) {
+    console.error("      -> [Chiến thuật] Quan sát Toàn diện: Cuộn 1 lần xuống cuối.");
+    await page.evaluate(() => { window.scrollBy(0, document.body.scrollHeight); });
+    await sleep(randomDelay(500, 1000));
+    return await page.content();
+}
+
+// Chiến thuật 2: Người đọc từng đoạn
+async function collectDataBySectionScroll(page) {
+    console.error("      -> [Chiến thuật] Người đọc từng đoạn: Cuộn từ từ theo nhiều bước.");
+    const scrollSteps = randomDelay(3, 5);
+    for (let s = 0; s < scrollSteps; s++) {
+        const scrollAmount = randomDelay(300, 600);
+        await page.evaluate((amount) => { window.scrollBy(0, amount); }, scrollAmount);
+        await sleep(randomDelay(400, 800));
+    }
+    await page.evaluate(() => { window.scrollBy(0, document.body.scrollHeight); }); // Cuộn nốt phần còn lại
+    await sleep(randomDelay(500, 1000));
+    return await page.content();
+}
+
+// Chiến thuật 3: Người lướt vội vã
+async function collectDataByHastyScan(page) {
+    console.error("      -> [Chiến thuật] Người lướt vội vã: Cuộn nhanh xuống và cuộn ngược lại.");
+    await page.evaluate(() => { window.scrollTo(0, document.body.scrollHeight); });
+    await sleep(randomDelay(600, 1200));
+    const randomUpScroll = Math.random() * 0.5 + 0.3; // Cuộn ngược lại 30-80%
+    await page.evaluate((scrollRatio) => {
+        window.scrollTo(0, document.body.scrollHeight * scrollRatio);
+    }, randomUpScroll);
+    await sleep(randomDelay(500, 1000));
+    return await page.content();
+}
+
+
 async function ultimateScraper() {
-    console.error("--- CHIẾN DỊCH 'ĐIỆP VIÊN TỐI THƯỢNG' BẮT ĐẦU ---");
+    console.error("--- CHIẾN DỊCH 'ĐIỆP VIÊN TỐI THƯỢỢNG' BẮT ĐẦU ---");
     let browser;
     const allJobs = [];
     let jobsCount = 0;
@@ -138,26 +222,25 @@ async function ultimateScraper() {
         if (!CHROME_EXECUTABLE_PATH) {
             throw new Error("Nhiệm vụ thất bại: Không nhận được 'Bản đồ Dẫn đường' (CHROME_PATH).");
         }
-
         let proxy = await getProxy(process.env.PROXY_API_KEY, process.env.PROXY_API_ENDPOINT);
         browser = await initializeBrowser(proxy, CHROME_EXECUTABLE_PATH);
-
         let page = await browser.newPage();
         await page.setViewport({ width: 1920, height: 1080 });
-
         const totalPages = await discoverTotalPages(page);
         
         const initialDelay = randomDelay(10000, 13500);
         console.error(`\n[Điệp viên] Do thám hoàn tất. Tạm nghỉ ${(initialDelay / 1000).toFixed(2)} giây...`);
         await sleep(initialDelay);
-
         let pagesUntilNextChange = randomDelay(10, 30);
         console.error(`[Điệp viên] Độ bền nhân dạng ban đầu: ${pagesUntilNextChange} trang.`);
-
         console.error("\n--- [Điệp viên] Bắt đầu giai đoạn KHAI THÁC ---");
+
+        // --- MẢNG CÁC CHIẾN THUẬT KHAI THÁC ---
+        const collectionStrategies = [collectDataByFullScroll, collectDataBySectionScroll, collectDataByHastyScan];
+
         for (let i = 1; i <= totalPages; i++) {
-            
             if (pagesUntilNextChange <= 0) {
+                // ... (Logic thay đổi proxy giữ nguyên)
                 console.error(`\n   -> [Điệp viên] Hết độ bền nhân dạng. Bắt đầu "biến hình"...`);
                 await browser.close();
                 proxy = await getProxy(process.env.PROXY_API_KEY, process.env.PROXY_API_ENDPOINT);
@@ -167,20 +250,17 @@ async function ultimateScraper() {
                 pagesUntilNextChange = randomDelay(10, 30);
                 console.error(`   -> [Điệp viên] "Biến hình" thành công. Độ bền nhân dạng mới: ${pagesUntilNextChange} trang.`);
             }
-
             const targetUrl = buildUrl(TARGET_KEYWORD, i);
             console.error(`   -> Đang khai thác trang ${i}/${totalPages} (còn ${pagesUntilNextChange} trang nữa sẽ biến hình)...`);
-
             try {
                 await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: PAGE_LOAD_TIMEOUT });
-                
                 const jobListSelector = 'div.job-list-search-result';
                 console.error("      -> Bắt đầu giai đoạn 'quan sát' để chờ trang ổn định...");
                 await page.waitForSelector(jobListSelector, { timeout: 30000 });
                 
+                // ... (Logic "Quan sát kiên nhẫn" giữ nguyên)
                 let previousHtml = '', currentHtml = '', stabilityCounter = 0;
                 const requiredStableChecks = 2;
-
                 for (let check = 0; check < 15; check++) {
                     currentHtml = await page.$eval(jobListSelector, element => element.innerHTML);
                     if (currentHtml.replace(/\s/g, '') === previousHtml.replace(/\s/g, '') && currentHtml.length > 100) {
@@ -193,26 +273,21 @@ async function ultimateScraper() {
                     previousHtml = currentHtml;
                     await sleep(2000);
                 }
-                
                 if (stabilityCounter < requiredStableChecks) {
                     throw new Error("Trang không ổn định, có thể đã bị chặn hoặc không có nội dung.");
                 }
                 console.error("      -> Trang đã ổn định. Dữ liệu chi tiết đã được tải.");
-
-                console.error("      -> Mô phỏng hành vi cuộn trang...");
-                await page.evaluate(() => { window.scrollBy(0, document.body.scrollHeight); });
-                await sleep(randomDelay(500, 1000));
                 
-                const content = await page.content();
+                // --- CHỌN NGẪU NHIÊN 1 CHIẾN THUẬT KHAI THÁC ---
+                const selectedCollectionStrategy = collectionStrategies[Math.floor(Math.random() * collectionStrategies.length)];
+                const content = await selectedCollectionStrategy(page);
+                
                 const $ = cheerio.load(content);
                 const jobListings = $('div[class*="job-item"]');
-
-                if (jobListings.length === 0 && i < totalPages) {
-                     console.error(`   -> Cảnh báo: Trang ${i} không có nội dung. Chuyển sang trang tiếp theo.`);
-                     pagesUntilNextChange--;
-                     continue;
+                if (jobListings.length === 0) {
+                     console.error(`   -> Cảnh báo: Trang ${i} không có nội dung. Dừng khai thác.`);
+                     break; 
                 }
-                 
                 jobListings.each((index, element) => {
                     const titleTag = $(element).find('h3[class*="title"] a');
                     const companyLogoTag = $(element).find('img.w-100.lazy');
@@ -220,33 +295,20 @@ async function ultimateScraper() {
                     const locationTag = $(element).find('.city-text');
                     const dateContainerTag = $(element).find('span.hidden-on-quick-view');
                     const expTag = $(element).find('.exp');
-                    
                     let companyText = companyLogoTag.length ? (companyLogoTag.attr('alt') || '').trim() : null;
                     let dateText = null;
                     if (dateContainerTag.length) {
                         const nextNode = dateContainerTag[0].nextSibling;
                         if (nextNode && nextNode.type === 'text') dateText = nextNode.data.trim();
                     }
-                    
                     allJobs.push({
-                        'keyword': TARGET_KEYWORD, 
-                        'title': titleTag.text().trim() || null, 
-                        'link': titleTag.attr('href') ? `https://www.topcv.vn${titleTag.attr('href')}` : null, 
-                        'company': companyText, 
-                        'salary': salaryTag.text().trim() || 'Thỏa thuận', 
-                        'Nơi làm việc': locationTag.text().trim() || null, 
-                        // --- THAY ĐỔI DUY NHẤT: ÁP DỤNG HÀM CONVERT ---
-                        'thời gian đăng': convertPostTimeToDate(dateText), 
-                        'Kinh nghiệm làm việc tối thiểu': (expTag.text() || '').trim() || null,
+                        'keyword': TARGET_KEYWORD, 'title': titleTag.text().trim() || null, 'link': titleTag.attr('href') ? `https://www.topcv.vn${titleTag.attr('href')}` : null, 'company': companyText, 'salary': salaryTag.text().trim() || 'Thỏa thuận', 'Nơi làm việc': locationTag.text().trim() || null, 'thời gian đăng': convertPostTimeToDate(dateText), 'Kinh nghiệm làm việc tối thiểu': (expTag.text() || '').trim() || null,
                     });
                 });
-
                 console.error(`   -> Đã thu thập ${jobListings.length} tin từ trang ${i}.`);
                 pagesUntilNextChange--;
-                
                 const betweenPagesDelay = randomDelay(18000, 25000);
                 await sleep(betweenPagesDelay);
-
             } catch (error) {
                 console.error(`   -> Lỗi khi xử lý trang ${i}: ${error.message}. Chuyển sang trang tiếp theo.`);
                 pagesUntilNextChange--;
@@ -261,12 +323,10 @@ async function ultimateScraper() {
             console.error("\n[Điệp viên] Rút lui an toàn, đã đóng trình duyệt.");
         }
     }
-
     if (allJobs.length > 0) {
-        const date = new Date().toLocaleString('vi-VN', {year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Asia/Ho_Chi_Minh'}).replace(/, /g, '_').replace(/\//g, '-').replace(/:/g, '-');
-        finalFilename = `data/topcv_${TARGET_KEYWORD}_${date}.csv`;
+        const timestamp = new Date().toLocaleString('vi-VN', {year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Asia/Ho_Chi_Minh'}).replace(/, /g, '_').replace(/\//g, '-').replace(/:/g, '-');
+        finalFilename = `data/topcv_${TARGET_KEYWORD}_${timestamp}.csv`;
         jobsCount = allJobs.length;
-        
         fs.mkdirSync('data', { recursive: true });
         fs.writeFileSync(finalFilename, '\ufeff' + stringify(allJobs, { header: true }));
         console.error(`\n--- BÁO CÁO NHIỆM VỤ ---`);
@@ -274,10 +334,8 @@ async function ultimateScraper() {
     } else {
         console.error('\nKhông có dữ liệu mới để tổng hợp.');
     }
-    
     const output = `jobs_count=${jobsCount}\nfinal_filename=${finalFilename}\n`;
     fs.appendFileSync(process.env.GITHUB_OUTPUT, output);
 }
 
-// Bắt đầu chiến dịch
 ultimateScraper();
