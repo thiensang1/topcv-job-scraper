@@ -37,6 +37,9 @@ jobs:
       - name: 'Install all project dependencies'
         run: npm install
 
+      - name: Install Puppeteer Browser
+        run: npx puppeteer browsers install chrome
+
       # --- GIAI ĐOẠN 2: TRIỂN KHAI "ĐIỆP VIÊN" ---
       - name: 'Run Lone Wolf Scraper'
         id: run_scraper
