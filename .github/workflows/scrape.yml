@@ -19,15 +19,14 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '18'
-          cache: 'npm'
-          
+          # Dòng "cache: 'npm'" đã được xóa ở đây
+
       - name: 'Install a stable version of Chrome'
         id: setup_chrome
         uses: browser-actions/setup-chrome@latest
         
-      # --- THAY ĐỔI DUY NHẤT Ở ĐÂY ---
       - name: 'Install project dependencies'
-        run: npm install # Sử dụng npm install thay vì npm ci
+        run: npm install # Dùng npm install vì không có file lock
       
       - name: 'Run Lone Wolf Scraper'
         id: run_scraper
