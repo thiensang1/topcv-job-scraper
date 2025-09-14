@@ -1,11 +1,22 @@
-const puppeteer = require('puppeteer');
+// --- PHIÊN BẢN "ĐIỆP VIÊN ĐƠN ĐỘC" - TƯƠNG THÍCH HOÀN HẢO VỚI WORKFLOW ---
+const puppeteer = require('puppeteer-core'); // Sử dụng puppeteer-core
 const cheerio = require('cheerio');
 const fs = require('fs');
 const { stringify } = require('csv-stringify/sync');
 
-const PROXY_SERVER = process.env.PROXY_URL;
+// --- ĐỌC CÁC BIẾN MÔI TRƯỜNG TỪ WORKFLOW ---
+const PROXY_SERVER = process.env.PROXY_URL; // Vẫn giữ lại nếu bạn cần
+const CHROME_PATH = process.env.CHROME_PATH; // Đường dẫn tới Chrome do workflow cài đặt
+
 const TARGET_KEYWORDS = ['ke-toan'];
 const PAGES_PER_KEYWORD = 200;
+
+// --- HÀM HELPER ĐỂ GỬI OUTPUT RA WORKFLOW ---
+function setOutput(name, value) {
+  if (process.env.GITHUB_OUTPUT) {
+    fs.appendFileSync(process.env.GITHUB_OUTPUT, `${name}=${value}\n`);
+  }
+}
 
 function convertPostTimeToDate(timeString) {
     if (!timeString) return null;
@@ -36,6 +47,7 @@ async function scrapeTopCVByKeyword(keyword, pageNum) {
     const base_url = "https://www.topcv.vn";
     const launchOptions = {
         headless: true,
+        executablePath: CHROME_PATH, // <-- SỬ DỤNG CHROME TỪ WORKFLOW
         args: ['--no-sandbox', '--disable-setuid-sandbox']
     };
     if (PROXY_SERVER) {
@@ -48,12 +60,7 @@ async function scrapeTopCVByKeyword(keyword, pageNum) {
     let processedJobs = [];
 
     try {
-        let targetUrl;
-        if (keyword === 'ke-toan') {
-            targetUrl = `${base_url}/tim-viec-lam-ke-toan-c39?page=${pageNum}`;
-        } else {
-            targetUrl = `${base_url}/tim-viec-lam-${keyword}?page=${pageNum}`;
-        }
+        let targetUrl = `${base_url}/tim-viec-lam-${keyword}-c39?page=${pageNum}`;
         await page.goto(targetUrl, { timeout: 60000 });
         const content = await page.content();
         const $ = cheerio.load(content);
@@ -101,12 +108,21 @@ async function scrapeTopCVByKeyword(keyword, pageNum) {
         }).replace(/, /g, '_').replace(/\//g, '-').replace(/:/g, '-');
         
         const finalFilename = `data/topcv_${TARGET_KEYWORD}_${timestamp}.csv`;
+        const jobsCount = allJobs.length;
+        
         fs.mkdirSync('data', { recursive: true });
         fs.writeFileSync(finalFilename, '\ufeff' + stringify(allJobs, { header: true }));
         
         console.error(`\n--- BÁO CÁO NHIỆM VỤ ---`);
-        console.error(`Đã tổng hợp ${allJobs.length} tin việc làm vào file ${finalFilename}`);
+        console.error(`Đã tổng hợp ${jobsCount} tin việc làm vào file ${finalFilename}`);
+
+        // --- GỬI OUTPUT RA CHO WORKFLOW ---
+        setOutput('jobs_count', jobsCount);
+        setOutput('final_filename', finalFilename);
+
     } else {
-        console.error('\nKhông có dữ liệu mới để tổng hợp. Vui lòng kiểm tra lại Proxy hoặc kết nối mạng.');
+        console.error('\nKhông có dữ liệu mới để tổng hợp.');
+        // Gửi output 0 để bước commit không chạy
+        setOutput('jobs_count', 0);
     }
 })();
