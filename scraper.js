@@ -85,7 +85,9 @@ async function scrapeTopCVByKeyword(keyword, pageNum) {
 
 (async () => {
     if (!CHROME_PATH) {
-        throw new Error("Biến môi trường CHROME_PATH không được thiết lập.");
+        console.error("Lỗi nghiêm trọng: Không tìm thấy đường dẫn trình duyệt Chrome (CHROME_PATH).");
+        setOutput('jobs_count', 0);
+        process.exit(1);
     }
     
     let allJobs = [];
