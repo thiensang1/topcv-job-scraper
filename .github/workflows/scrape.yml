@@ -25,8 +25,9 @@ jobs:
         id: setup_chrome
         uses: browser-actions/setup-chrome@latest
         
+      # --- THAY ĐỔI DUY NHẤT Ở ĐÂY ---
       - name: 'Install project dependencies'
-        run: npm ci
+        run: npm install # Sử dụng npm install thay vì npm ci
       
       - name: 'Run Lone Wolf Scraper'
         id: run_scraper
