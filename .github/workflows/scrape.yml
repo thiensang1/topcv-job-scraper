@@ -1,28 +1,19 @@
-# --- QUY TRÌNH TỰ ĐỘNG HÓA CUỐI CÙNG - PHIÊN BẢN "ĐIỆP VIÊN ĐƠN ĐỘC" ---
-# Cập nhật: Sửa lỗi cú pháp YAML và đảm bảo tính tương thích.
-
 name: 'TopCV Daily Scraper'
 
 on:
   schedule:
- # Chạy 4 lần mỗi ngày (7h, 12h, 17h, 22h sáng VN)
     - cron: '0 0,5,10,15 * * *'
   workflow_dispatch:
 
 jobs:
-  # --- MỘT JOB DUY NHẤT ĐỂ THỰC HIỆN TOÀN BỘ "CHIẾN DỊCH" ---
   scrape-and-commit:
     runs-on: ubuntu-latest
-  # --- PHẦN NÀY ĐỂ CẤP QUYỀN GHI ---
     permissions:
       contents: write
    
     steps:
-      # --- GIAI ĐOẠN 1: CHUẨN BỊ "CĂN CỨ" ---
       - name: 'Checkout repository'
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0 
           
       - name: 'Set up Node.js'
         uses: actions/setup-node@v4
@@ -30,30 +21,23 @@ jobs:
           node-version: '18'
           cache: 'npm'
           
-      - name: 'Setup Chrome browser'
+      - name: 'Install a stable version of Chrome'
         id: setup_chrome
         uses: browser-actions/setup-chrome@latest
         
-      - name: 'Install all project dependencies'
-        run: npm install
-
-      # --- GIAI ĐOẠN 2: TRIỂN KHAI "ĐIỆP VIÊN" ---
+      - name: 'Install project dependencies'
+        run: npm ci
+      
       - name: 'Run Lone Wolf Scraper'
         id: run_scraper
         env:
-          PROXY_API_ENDPOINT: ${{ secrets.PROXY_API_ENDPOINT }}
-          PROXY_API_KEY: ${{ secrets.PROXY_API_KEY }}
+          PROXY_URL: ${{ secrets.PROXY_URL }}
           CHROME_PATH: ${{ steps.setup_chrome.outputs.chrome-path }}
         run: node scraper.js
       
-      # --- GIAI ĐOẠN 3: TỔNG HỢP VÀ LƯU TRỮ ---
       - name: 'Commit results to repository'
         if: steps.run_scraper.outputs.jobs_count > 0
-        run: |
-          git pull origin main --rebase
-          
-          git config --global user.name 'GitHub Actions Scraper'
-          git config --global user.email 'actions@github.com'
-          git add ${{ steps.run_scraper.outputs.final_filename }}
-          git commit -m "📊 Dữ liệu TopCV: Thêm ${{ steps.run_scraper.outputs.jobs_count }} tin mới vào ${{ steps.run_scraper.outputs.final_filename }}"
-          git push
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "📊 Dữ liệu TopCV: Thêm ${{ steps.run_scraper.outputs.jobs_count }} tin mới"
+          file_pattern: "data/*.csv"
