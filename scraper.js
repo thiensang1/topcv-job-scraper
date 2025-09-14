@@ -43,11 +43,10 @@ async function scrapeTopCVByKeyword(keyword, pageNum) {
         launchOptions.args.push(`--proxy-server=${PROXY_SERVER}`);
     }
 
-    // Cấu trúc gốc của bạn: mở và đóng trình duyệt cho mỗi trang
     const browser = await puppeteer.launch(launchOptions);
     const page = await browser.newPage();
-    
     let processedJobs = [];
+
     try {
         let targetUrl;
         if (keyword === 'ke-toan') {
@@ -55,9 +54,7 @@ async function scrapeTopCVByKeyword(keyword, pageNum) {
         } else {
             targetUrl = `${base_url}/tim-viec-lam-${keyword}?page=${pageNum}`;
         }
-        
         await page.goto(targetUrl, { timeout: 60000 });
-        
         const content = await page.content();
         const $ = cheerio.load(content);
         const jobListings = $('div.job-item');
@@ -76,7 +73,6 @@ async function scrapeTopCVByKeyword(keyword, pageNum) {
             });
         });
     } catch (error) {
-        // Nếu có lỗi, chỉ thông báo và trả về mảng rỗng, không làm sập chương trình
         console.error(`Lỗi khi quét trang ${pageNum}: ${error.message}`);
     } finally {
         await browser.close();
@@ -87,17 +83,12 @@ async function scrapeTopCVByKeyword(keyword, pageNum) {
 (async () => {
     let allJobs = [];
     const TARGET_KEYWORD = TARGET_KEYWORDS[0];
-
     for (let i = 1; i <= PAGES_PER_KEYWORD; i++) {
         console.log(`Đang quét từ khóa '${TARGET_KEYWORD}' trang ${i}...`);
         const jobs = await scrapeTopCVByKeyword(TARGET_KEYWORD, i);
-        
-        if (jobs.length === 0) {
-            // Kiểm tra thêm để biết có phải do lỗi timeout hay là hết trang
-            if (i > 1) { // Nếu không phải trang đầu thì khả năng cao là hết trang
-                 console.log(`Không tìm thấy việc làm nào ở trang ${i}. Dừng lại.`);
-                 break;
-            }
+        if (jobs.length === 0 && i > 1) {
+            console.log(`Không tìm thấy việc làm nào ở trang ${i}. Dừng lại.`);
+            break;
         }
         allJobs.push(...jobs);
     }
@@ -110,13 +101,11 @@ async function scrapeTopCVByKeyword(keyword, pageNum) {
         }).replace(/, /g, '_').replace(/\//g, '-').replace(/:/g, '-');
         
         const finalFilename = `data/topcv_${TARGET_KEYWORD}_${timestamp}.csv`;
-        const jobsCount = allJobs.length;
-        
         fs.mkdirSync('data', { recursive: true });
         fs.writeFileSync(finalFilename, '\ufeff' + stringify(allJobs, { header: true }));
         
         console.error(`\n--- BÁO CÁO NHIỆM VỤ ---`);
-        console.error(`Đã tổng hợp ${jobsCount} tin việc làm vào file ${finalFilename}`);
+        console.error(`Đã tổng hợp ${allJobs.length} tin việc làm vào file ${finalFilename}`);
     } else {
         console.error('\nKhông có dữ liệu mới để tổng hợp. Vui lòng kiểm tra lại Proxy hoặc kết nối mạng.');
     }
