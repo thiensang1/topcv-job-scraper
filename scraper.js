@@ -11,7 +11,7 @@ const axios = require('axios');
 puppeteer.use(StealthPlugin());
 
 // --- CẤU HÌNH ---
-const TARGET_KEYWORD = "ke-toan"; 
+const TARGET_KEYWORD = "ke-to-an"; 
 const BROWSER_TIMEOUT = 120000;
 const PAGE_LOAD_TIMEOUT = 60000;
 const MAX_PAGES_TO_CHECK = 200; 
@@ -20,10 +20,40 @@ const MAX_PAGES_TO_CHECK = 200;
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 const randomDelay = (min, max) => Math.floor(Math.random() * (max - min + 1) + min);
 
+// --- HÀM CONVERT NGÀY THÁNG ĐƯỢC BỔ SUNG ---
+function convertPostTimeToDate(timeString) {
+    if (!timeString) return null;
+    const now = new Date();
+    const normalizedString = timeString.toLowerCase().trim();
+
+    if (normalizedString.includes('hôm qua')) {
+        now.setDate(now.getDate() - 1);
+    } else if (normalizedString.includes('hôm kia')) {
+        now.setDate(now.getDate() - 2);
+    } else if (normalizedString.includes('ngày trước')) {
+        const days = parseInt(normalizedString.match(/\d+/)[0]);
+        if (!isNaN(days)) now.setDate(now.getDate() - days);
+    } else if (normalizedString.includes('tuần trước')) {
+        const weeks = parseInt(normalizedString.match(/\d+/)[0]);
+        if (!isNaN(weeks)) now.setDate(now.getDate() - (weeks * 7));
+    } else if (normalizedString.includes('tháng trước')) {
+        const months = parseInt(normalizedString.match(/\d+/)[0]);
+        if (!isNaN(months)) now.setMonth(now.getMonth() - months);
+    } else if (normalizedString.includes('năm trước')) {
+        const years = parseInt(normalizedString.match(/\d+/)[0]);
+        if (!isNaN(years)) now.setFullYear(now.getFullYear() - years);
+    } else if (/^\d{1,2}-\d{1,2}-\d{4}$/.test(normalizedString)) {
+        const parts = normalizedString.split('-');
+        return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+    }
+    return now.toISOString().split('T')[0];
+}
+// --- KẾT THÚC HÀM BỔ SUNG ---
+
 // --- HÀM XÂY DỰNG URL ---
 function buildUrl(keyword, page) {
     const BASE_URL = "https://www.topcv.vn";
-    if (keyword === 'ke-toan') {
+    if (keyword === 'ke-to-an') {
         return `${BASE_URL}/tim-viec-lam-ke-toan-cr392cb393?type_keyword=1&page=${page}&category_family=r392~b393`;
     } else {
         return `${BASE_URL}/tim-viec-lam-${keyword}?type_keyword=1&page=${page}&sba=1`;
@@ -199,7 +229,15 @@ async function ultimateScraper() {
                     }
                     
                     allJobs.push({
-                        'keyword': TARGET_KEYWORD, 'title': titleTag.text().trim() || null, 'link': titleTag.attr('href') ? `https://www.topcv.vn${titleTag.attr('href')}` : null, 'company': companyText, 'salary': salaryTag.text().trim() || 'Thỏa thuận', 'Nơi làm việc': locationTag.text().trim() || null, 'thời gian đăng': dateText, 'Kinh nghiệm làm việc tối thiểu': (expTag.text() || '').trim() || null,
+                        'keyword': TARGET_KEYWORD,
+                        'title': titleTag.text().trim() || null,
+                        'link': titleTag.attr('href') ? `https://www.topcv.vn${titleTag.attr('href')}` : null,
+                        'company': companyText,
+                        'salary': salaryTag.text().trim() || 'Thỏa thuận',
+                        'Nơi làm việc': locationTag.text().trim() || null,
+                        // --- THAY ĐỔI DUY NHẤT: ÁP DỤNG HÀM CONVERT ---
+                        'thời gian đăng': convertPostTimeToDate(dateText),
+                        'Kinh nghiệm làm việc tối thiểu': (expTag.text() || '').trim() || null,
                     });
                 });
 
@@ -243,4 +281,3 @@ async function ultimateScraper() {
 
 // Bắt đầu chiến dịch
 ultimateScraper();
-
