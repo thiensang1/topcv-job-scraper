@@ -1,17 +1,13 @@
-// --- PHIÊN BẢN "ĐIỆP VIÊN ĐƠN ĐỘC" - TƯƠNG THÍCH HOÀN HẢO VỚI WORKFLOW ---
-const puppeteer = require('puppeteer-core'); // Sử dụng puppeteer-core
+const puppeteer = require('puppeteer-core');
 const cheerio = require('cheerio');
 const fs = require('fs');
 const { stringify } = require('csv-stringify/sync');
 
-// --- ĐỌC CÁC BIẾN MÔI TRƯỜNG TỪ WORKFLOW ---
-const PROXY_SERVER = process.env.PROXY_URL; // Vẫn giữ lại nếu bạn cần
-const CHROME_PATH = process.env.CHROME_PATH; // Đường dẫn tới Chrome do workflow cài đặt
-
+const PROXY_SERVER = process.env.PROXY_URL;
+const CHROME_PATH = process.env.CHROME_PATH;
 const TARGET_KEYWORDS = ['ke-toan'];
 const PAGES_PER_KEYWORD = 200;
 
-// --- HÀM HELPER ĐỂ GỬI OUTPUT RA WORKFLOW ---
 function setOutput(name, value) {
   if (process.env.GITHUB_OUTPUT) {
     fs.appendFileSync(process.env.GITHUB_OUTPUT, `${name}=${value}\n`);
@@ -47,7 +43,7 @@ async function scrapeTopCVByKeyword(keyword, pageNum) {
     const base_url = "https://www.topcv.vn";
     const launchOptions = {
         headless: true,
-        executablePath: CHROME_PATH, // <-- SỬ DỤNG CHROME TỪ WORKFLOW
+        executablePath: CHROME_PATH,
         args: ['--no-sandbox', '--disable-setuid-sandbox']
     };
     if (PROXY_SERVER) {
@@ -88,6 +84,10 @@ async function scrapeTopCVByKeyword(keyword, pageNum) {
 }
 
 (async () => {
+    if (!CHROME_PATH) {
+        throw new Error("Biến môi trường CHROME_PATH không được thiết lập.");
+    }
+    
     let allJobs = [];
     const TARGET_KEYWORD = TARGET_KEYWORDS[0];
     for (let i = 1; i <= PAGES_PER_KEYWORD; i++) {
@@ -115,14 +115,10 @@ async function scrapeTopCVByKeyword(keyword, pageNum) {
         
         console.error(`\n--- BÁO CÁO NHIỆM VỤ ---`);
         console.error(`Đã tổng hợp ${jobsCount} tin việc làm vào file ${finalFilename}`);
-
-        // --- GỬI OUTPUT RA CHO WORKFLOW ---
         setOutput('jobs_count', jobsCount);
         setOutput('final_filename', finalFilename);
-
     } else {
         console.error('\nKhông có dữ liệu mới để tổng hợp.');
-        // Gửi output 0 để bước commit không chạy
         setOutput('jobs_count', 0);
     }
 })();
