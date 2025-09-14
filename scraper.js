@@ -1,4 +1,4 @@
-// --- ĐIỆP VIÊN ĐƠN ĐỘC (SCRAPER) - PHIÊN BẢN TỐI THƯỢNG ---
+// --- ĐIỆP VIÊN ĐƠN ĐỘC (SCRAPER) - PHIÊN BẢN TỐI THƯỢỢNG ---
 // Cập nhật: Tích hợp logic "Quan sát Kiên nhẫn" vào "Điệp viên Tắc kè hoa".
 
 const puppeteer = require('puppeteer-extra');
@@ -19,6 +19,37 @@ const MAX_PAGES_TO_CHECK = 200;
 // --- HÀM TIỆN ÍCH ---
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 const randomDelay = (min, max) => Math.floor(Math.random() * (max - min + 1) + min);
+
+// --- HÀM CONVERT NGÀY THÁNG ĐƯỢC BỔ SUNG ---
+function convertPostTimeToDate(timeString) {
+    if (!timeString) return null;
+    const now = new Date();
+    const normalizedString = timeString.toLowerCase().trim();
+
+    if (normalizedString.includes('hôm qua')) {
+        now.setDate(now.getDate() - 1);
+    } else if (normalizedString.includes('hôm kia')) {
+        now.setDate(now.getDate() - 2);
+    } else if (normalizedString.includes('ngày trước')) {
+        const days = parseInt(normalizedString.match(/\d+/)[0]);
+        if (!isNaN(days)) now.setDate(now.getDate() - days);
+    } else if (normalizedString.includes('tuần trước')) {
+        const weeks = parseInt(normalizedString.match(/\d+/)[0]);
+        if (!isNaN(weeks)) now.setDate(now.getDate() - (weeks * 7));
+    } else if (normalizedString.includes('tháng trước')) {
+        const months = parseInt(normalizedString.match(/\d+/)[0]);
+        if (!isNaN(months)) now.setMonth(now.getMonth() - months);
+    } else if (normalizedString.includes('năm trước')) {
+        const years = parseInt(normalizedString.match(/\d+/)[0]);
+        if (!isNaN(years)) now.setFullYear(now.getFullYear() - years);
+    } else if (/^\d{1,2}-\d{1,2}-\d{4}$/.test(normalizedString)) {
+        const parts = normalizedString.split('-');
+        return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+    }
+    // Trả về ngày đã được tính toán theo định dạng YYYY-MM-DD
+    return now.toISOString().split('T')[0];
+}
+// --- KẾT THÚC HÀM BỔ SUNG ---
 
 // --- HÀM XÂY DỰNG URL ---
 function buildUrl(keyword, page) {
@@ -143,10 +174,9 @@ async function ultimateScraper() {
             try {
                 await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: PAGE_LOAD_TIMEOUT });
                 
-                // --- LOGIC MỚI: "QUAN SÁT KIÊN NHẪN" ---
                 const jobListSelector = 'div.job-list-search-result';
                 console.error("      -> Bắt đầu giai đoạn 'quan sát' để chờ trang ổn định...");
-                await page.waitForSelector(jobListSelector, { timeout: 30000 }); // Chờ bộ khung xuất hiện
+                await page.waitForSelector(jobListSelector, { timeout: 30000 });
                 
                 let previousHtml = '', currentHtml = '', stabilityCounter = 0;
                 const requiredStableChecks = 2;
@@ -199,7 +229,15 @@ async function ultimateScraper() {
                     }
                     
                     allJobs.push({
-                        'keyword': TARGET_KEYWORD, 'title': titleTag.text().trim() || null, 'link': titleTag.attr('href') ? `https://www.topcv.vn${titleTag.attr('href')}` : null, 'company': companyText, 'salary': salaryTag.text().trim() || 'Thỏa thuận', 'Nơi làm việc': locationTag.text().trim() || null, 'thời gian đăng': dateText, 'Kinh nghiệm làm việc tối thiểu': (expTag.text() || '').trim() || null,
+                        'keyword': TARGET_KEYWORD, 
+                        'title': titleTag.text().trim() || null, 
+                        'link': titleTag.attr('href') ? `https://www.topcv.vn${titleTag.attr('href')}` : null, 
+                        'company': companyText, 
+                        'salary': salaryTag.text().trim() || 'Thỏa thuận', 
+                        'Nơi làm việc': locationTag.text().trim() || null, 
+                        // --- THAY ĐỔI DUY NHẤT: ÁP DỤNG HÀM CONVERT ---
+                        'thời gian đăng': convertPostTimeToDate(dateText), 
+                        'Kinh nghiệm làm việc tối thiểu': (expTag.text() || '').trim() || null,
                     });
                 });
 
@@ -243,4 +281,3 @@ async function ultimateScraper() {
 
 // Bắt đầu chiến dịch
 ultimateScraper();
-
