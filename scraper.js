@@ -1,4 +1,4 @@
-// --- ĐIỆP VIÊN ĐƠN ĐỘC (SCRAPER) - PHIÊN BẢN TỐI THƯỢỢNG ---
+// --- ĐIỆP VIÊN ĐƠN ĐỘC (SCRAPER) - PHIÊN BẢN TỐI THƯỢNG ---
 // Cập nhật: Tích hợp cấu trúc do thám "Kế hoạch A, Kế hoạch B".
 
 const puppeteer = require('puppeteer-extra');
