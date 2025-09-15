@@ -219,7 +219,7 @@ async function initializeBrowser(proxy, chromePath) {
 
 async function ultimateScraper() {
     // ... (Toàn bộ các hàm và logic còn lại giữ nguyên y hệt)
-    console.error("--- CHIẾN DỊCH 'ĐIỆP VIÊN TỐI THƯỢỢNG' BẮT ĐẦU ---");
+    console.error("--- CHIẾN DỊCH 'ĐIỆP VIÊN TỐI THƯỢNG' BẮT ĐẦU ---");
     let browser;
     const allJobs = [];
     let jobsCount = 0;
