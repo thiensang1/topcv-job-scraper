@@ -1,0 +1,44 @@
+# Tên của workflow, sẽ hiển thị trên tab Actions
+name: 'VietnamWorks Daily Scraper'
+
+on:
+  # Cho phép bạn chạy thủ công từ tab Actions
+  workflow_dispatch:
+  
+  # Lịch chạy tự động
+  schedule:
+    # Chạy 4 lần mỗi ngày, lệch 1 giờ so với TopCV để tránh chạy cùng lúc
+    # Tương ứng: 8h sáng, 1h trưa, 6h chiều, 11h tối (giờ Việt Nam)
+    - cron: '0 1,6,11,18 * * *'
+
+jobs:
+  scrape-vietnamworks:
+    runs-on: ubuntu-latest
+    permissions:
+      # Cấp quyền để workflow có thể commit file CSV vào repository
+      contents: write
+   
+    steps:
+      - name: 'Checkout repository'
+        uses: actions/checkout@v4
+          
+      - name: 'Set up Node.js'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          
+      - name: 'Install project dependencies'
+        run: npm install
+      
+      # Không cần bước cài đặt Chrome vì script này dùng Axios
+      
+      - name: 'Run VietnamWorks Scraper'
+        # Script này không cần secrets, nó sẽ chạy trực tiếp
+        run: node vietnamworks-scraper.js
+      
+      - name: 'Commit results to repository'
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "📊 Dữ liệu VietnamWorks: Thêm file dữ liệu mới"
+          # Chỉ commit các file CSV của VietnamWorks
+          file_pattern: "data/vietnamworks_*.csv"
