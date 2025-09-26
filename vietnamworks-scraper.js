@@ -2,7 +2,7 @@ const fs = require('fs');
 const axios = require('axios');
 const { stringify } = require('csv-stringify/sync');
 
-const TARGET_KEYWORD = "kế toán";
+const TARGET_KEYWORD = " ";
 const JOBS_PER_PAGE = 50;
 const API_JOB_SEARCH = "https://ms.vietnamworks.com/job-search/v1.0/search";
 const API_META_DATA = "https://ms.vietnamworks.com/meta/v1.0/job-levels";
