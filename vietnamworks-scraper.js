@@ -3,9 +3,8 @@ const axios = require('axios');
 const { stringify } = require('csv-stringify/sync');
 
 // --- CẤU HÌNH ---
-const TARGET_KEYWORD = "kế toán"; // Giữ nguyên để đặt tên file
-const API_KEYWORD = "accounting"; // <-- THAY ĐỔI 1: Sử dụng từ khóa tiếng Anh cho API
-const JOBS_PER_PAGE = 100;
+const TARGET_KEYWORD = "kế toán";
+const JOBS_PER_PAGE = 50; // API trả về 50 tin mỗi trang
 
 // --- API ENDPOINTS ---
 const API_JOB_SEARCH = "https://ms.vietnamworks.com/job-search/v1.0/search";
@@ -13,16 +12,19 @@ const API_META_DATA = "https://ms.vietnamworks.com/meta/v1.0/job-levels";
 
 // --- HÀM TIỆN ÍCH ---
 function formatSalary(min, max) {
+    // Cập nhật để xử lý VND
     if (min === 0 && max === 0) return "Thỏa thuận";
-    if (min > 0 && max > 0) return `${min} - ${max} USD`;
-    if (min > 0) return `Từ ${min} USD`;
-    if (max > 0) return `Lên đến ${max} USD`;
+    const format = (num) => new Intl.NumberFormat('vi-VN').format(num);
+    if (min > 0 && max > 0) return `${format(min)} - ${format(max)} VND`;
+    if (min > 0) return `Từ ${format(min)} VND`;
+    if (max > 0) return `Lên đến ${format(max)} VND`;
     return "Thỏa thuận";
 }
 
-function formatDate(unixTimestamp) {
-    if (!unixTimestamp) return null;
-    return new Date(unixTimestamp * 1000).toISOString().split('T')[0];
+function formatDate(isoString) {
+    // Cập nhật để xử lý chuỗi ISO thay vì Unix timestamp
+    if (!isoString) return null;
+    return isoString.split('T')[0]; // Lấy phần YYYY-MM-DD
 }
 
 // --- GIAI ĐOẠN 1: TẢI DỮ LIỆU META ---
@@ -31,7 +33,6 @@ async function fetchJobLevels() {
     try {
         const response = await axios.get(API_META_DATA);
         const jobLevels = new Map();
-        // --- THAY ĐỔI 2: Sửa lại đường dẫn đọc dữ liệu ---
         if (response.data?.data?.jobLevel) {
             response.data.data.jobLevel.forEach(item => {
                 if (item.type === "jobLevelItem") {
@@ -50,27 +51,31 @@ async function fetchJobLevels() {
 // --- GIAI ĐOẠN 2 & 3: KHAI THÁC, TỔNG HỢP ---
 async function scrapeAllJobs(jobLevelsMap) {
     let allJobs = [];
-    let currentPage = 1;
+    let currentPage = 1; 
     let totalPages = 1;
     
     console.error(`\n--- Bắt đầu khai thác dữ liệu cho từ khóa: "${TARGET_KEYWORD}" ---`);
 
-    while (currentPage <= totalPages) {
+    // API của VietnamWorks dùng page index từ 0, nhưng gửi request từ 1 vẫn được chấp nhận
+    while (currentPage <= totalPages) { 
         try {
             console.error(`Đang khai thác trang ${currentPage}/${totalPages}...`);
-            const response = await axios.get(API_JOB_SEARCH, {
+            const requestBody = { query: TARGET_KEYWORD };
+            const requestOptions = {
                 params: {
-                    keyword: API_KEYWORD, // <-- Sử dụng từ khóa tiếng Anh
                     pageSize: JOBS_PER_PAGE,
                     page: currentPage,
                 }
-            });
+            };
+            const response = await axios.post(API_JOB_SEARCH, requestBody, requestOptions);
 
-            const { jobs, total } = response.data.data;
+            // --- CẬP NHẬT LOGIC ĐỌC DỮ LIỆU ---
+            const jobs = response.data.data; // Mảng việc làm nằm ở đây
+            const meta = response.data.meta; // Thông tin meta nằm ở đây
 
             if (currentPage === 1) {
-                totalPages = Math.ceil(total / JOBS_PER_PAGE);
-                console.error(`Phát hiện có tổng cộng ${total} tin tuyển dụng (${totalPages} trang).`);
+                totalPages = meta.nbPages; // Lấy tổng số trang từ meta
+                console.error(`Phát hiện có tổng cộng ${meta.nbHits} tin tuyển dụng (${totalPages} trang).`);
             }
 
             if (!jobs || jobs.length === 0) {
@@ -82,22 +87,18 @@ async function scrapeAllJobs(jobLevelsMap) {
                 'Tên công việc': job.jobTitle,
                 'Tên công ty': job.companyName,
                 'Cấp bậc': jobLevelsMap.get(job.jobLevelId) || 'Không xác định',
-                'Mức lương (USD)': formatSalary(job.salaryMin, job.salaryMax),
+                'Mức lương (VND)': formatSalary(job.salaryMin, job.salaryMax),
                 'Ngày đăng tin': formatDate(job.approvedOn),
                 'Ngày hết hạn': formatDate(job.expiredOn),
                 'Link': job.jobUrl
             }));
+            // --- KẾT THÚC CẬP NHẬT ---
 
             allJobs.push(...processedJobs);
             currentPage++;
 
         } catch (error) {
-            // Kiểm tra nếu lỗi là 404
-            if (error.response && error.response.status === 404) {
-                console.error(`Lỗi 404 khi khai thác trang ${currentPage}. Có thể API đã thay đổi hoặc từ khóa không hợp lệ.`);
-            } else {
-                console.error(`Lỗi khi khai thác trang ${currentPage}:`, error.message);
-            }
+            console.error(`Lỗi khi khai thác trang ${currentPage}:`, error.message);
             break;
         }
     }
