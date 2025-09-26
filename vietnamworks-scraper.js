@@ -3,8 +3,9 @@ const axios = require('axios');
 const { stringify } = require('csv-stringify/sync');
 
 // --- CẤU HÌNH ---
-const TARGET_KEYWORD = "kế toán"; // Từ khóa bạn muốn tìm
-const JOBS_PER_PAGE = 100; // Số lượng tin trên mỗi request API, tối đa là 100
+const TARGET_KEYWORD = "kế toán"; // Giữ nguyên để đặt tên file
+const API_KEYWORD = "accounting"; // <-- THAY ĐỔI 1: Sử dụng từ khóa tiếng Anh cho API
+const JOBS_PER_PAGE = 100;
 
 // --- API ENDPOINTS ---
 const API_JOB_SEARCH = "https://ms.vietnamworks.com/job-search/v1.0/search";
@@ -19,7 +20,6 @@ function formatSalary(min, max) {
     return "Thỏa thuận";
 }
 
-// Chuyển đổi Unix timestamp (tính bằng giây) sang định dạng YYYY-MM-DD
 function formatDate(unixTimestamp) {
     if (!unixTimestamp) return null;
     return new Date(unixTimestamp * 1000).toISOString().split('T')[0];
@@ -31,8 +31,9 @@ async function fetchJobLevels() {
     try {
         const response = await axios.get(API_META_DATA);
         const jobLevels = new Map();
-        if (response.data && response.data.data) {
-            response.data.data.forEach(item => {
+        // --- THAY ĐỔI 2: Sửa lại đường dẫn đọc dữ liệu ---
+        if (response.data?.data?.jobLevel) {
+            response.data.data.jobLevel.forEach(item => {
                 if (item.type === "jobLevelItem") {
                     jobLevels.set(item.id, item.name);
                 }
@@ -42,7 +43,7 @@ async function fetchJobLevels() {
         return jobLevels;
     } catch (error) {
         console.error("Lỗi khi tải dữ liệu meta:", error.message);
-        return new Map(); // Trả về một map rỗng nếu có lỗi
+        return new Map();
     }
 }
 
@@ -50,7 +51,7 @@ async function fetchJobLevels() {
 async function scrapeAllJobs(jobLevelsMap) {
     let allJobs = [];
     let currentPage = 1;
-    let totalPages = 1; // Giả định ban đầu
+    let totalPages = 1;
     
     console.error(`\n--- Bắt đầu khai thác dữ liệu cho từ khóa: "${TARGET_KEYWORD}" ---`);
 
@@ -59,7 +60,7 @@ async function scrapeAllJobs(jobLevelsMap) {
             console.error(`Đang khai thác trang ${currentPage}/${totalPages}...`);
             const response = await axios.get(API_JOB_SEARCH, {
                 params: {
-                    keyword: TARGET_KEYWORD,
+                    keyword: API_KEYWORD, // <-- Sử dụng từ khóa tiếng Anh
                     pageSize: JOBS_PER_PAGE,
                     page: currentPage,
                 }
@@ -68,7 +69,6 @@ async function scrapeAllJobs(jobLevelsMap) {
             const { jobs, total } = response.data.data;
 
             if (currentPage === 1) {
-                // Cập nhật tổng số trang ở lần gọi đầu tiên
                 totalPages = Math.ceil(total / JOBS_PER_PAGE);
                 console.error(`Phát hiện có tổng cộng ${total} tin tuyển dụng (${totalPages} trang).`);
             }
@@ -92,8 +92,13 @@ async function scrapeAllJobs(jobLevelsMap) {
             currentPage++;
 
         } catch (error) {
-            console.error(`Lỗi khi khai thác trang ${currentPage}:`, error.message);
-            break; // Dừng lại nếu có lỗi
+            // Kiểm tra nếu lỗi là 404
+            if (error.response && error.response.status === 404) {
+                console.error(`Lỗi 404 khi khai thác trang ${currentPage}. Có thể API đã thay đổi hoặc từ khóa không hợp lệ.`);
+            } else {
+                console.error(`Lỗi khi khai thác trang ${currentPage}:`, error.message);
+            }
+            break;
         }
     }
     return allJobs;
