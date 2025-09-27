@@ -1,13 +1,8 @@
-# Tên của workflow, sẽ hiển thị trên tab Actions
 name: 'VietnamWorks Daily Scraper'
 
 on:
-  # Cho phép bạn chạy thủ công từ tab Actions
   workflow_dispatch:
-  
-  # Lịch chạy tự động
   schedule:
-    # Chạy 4 lần mỗi ngày, lệch 1 giờ so với TopCV để tránh chạy cùng lúc
     - cron: '0 1,6,11,18 * * *'
 
 jobs:
@@ -28,15 +23,15 @@ jobs:
       - name: 'Install project dependencies'
         run: npm install
       
+      # Workflow này không cần cài Chrome và không thiết lập biến môi trường proxy
+      
       - name: 'Run VietnamWorks Scraper'
-        id: run_scraper # <-- Thêm ID để các bước sau có thể tham chiếu
+        id: run_scraper
         run: node vietnamworks-scraper.js
       
       - name: 'Commit results to repository'
-        # Chỉ chạy nếu bước trước đó có output jobs_count > 0
         if: steps.run_scraper.outputs.jobs_count > 0
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
-          # Sử dụng output để tạo commit message động
           commit_message: "📊 Dữ liệu VietnamWorks: Thêm ${{ steps.run_scraper.outputs.jobs_count }} tin mới"
           file_pattern: "data/vietnamworks_*.csv"
