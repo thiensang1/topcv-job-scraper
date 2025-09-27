@@ -2,18 +2,15 @@ const fs = require('fs');
 const axios = require('axios');
 const { stringify } = require('csv-stringify/sync');
 
-const TARGET_KEYWORD = "";
+// --- CẤU HÌNH ---
+const TARGET_KEYWORD = "kế toán";
 const JOBS_PER_PAGE = 50;
+
+// --- API ENDPOINTS ---
 const API_JOB_SEARCH = "https://ms.vietnamworks.com/job-search/v1.0/search";
 const API_META_DATA = "https://ms.vietnamworks.com/meta/v1.0/job-levels";
 
-// --- HÀM HELPER ĐỂ GỬI OUTPUT RA WORKFLOW ---
-function setOutput(name, value) {
-  if (process.env.GITHUB_OUTPUT) {
-    fs.appendFileSync(process.env.GITHUB_OUTPUT, `${name}=${value}\n`);
-  }
-}
-
+// --- HÀM TIỆN ÍCH ---
 function formatSalary(min, max) {
     if (min === 0 && max === 0) return "Thỏa thuận";
     const format = (num) => new Intl.NumberFormat('vi-VN').format(num);
@@ -28,6 +25,7 @@ function formatDate(isoString) {
     return isoString.split('T')[0];
 }
 
+// --- GIAI ĐOẠN 1: TẢI DỮ LIỆU META ---
 async function fetchJobLevels() {
     console.error("-> Đang tải dữ liệu meta về cấp bậc công việc...");
     try {
@@ -49,6 +47,7 @@ async function fetchJobLevels() {
     }
 }
 
+// --- GIAI ĐOẠN 2 & 3: KHAI THÁC, TỔNG HỢP ---
 async function scrapeAllJobs(jobLevelsMap) {
     let allJobs = [];
     let currentPage = 1; 
@@ -61,7 +60,10 @@ async function scrapeAllJobs(jobLevelsMap) {
             console.error(`Đang khai thác trang ${currentPage}/${totalPages}...`);
             const requestBody = { query: TARGET_KEYWORD };
             const requestOptions = {
-                params: { pageSize: JOBS_PER_PAGE, page: currentPage }
+                params: {
+                    pageSize: JOBS_PER_PAGE,
+                    page: currentPage,
+                }
             };
             const response = await axios.post(API_JOB_SEARCH, requestBody, requestOptions);
 
@@ -78,15 +80,26 @@ async function scrapeAllJobs(jobLevelsMap) {
                 break;
             }
 
-            const processedJobs = jobs.map(job => ({
-                'Tên công việc': job.jobTitle,
-                'Tên công ty': job.companyName,
-                'Cấp bậc': jobLevelsMap.get(job.jobLevelId) || 'Không xác định',
-                'Mức lương (VND)': formatSalary(job.salaryMin, job.salaryMax),
-                'Ngày đăng tin': formatDate(job.approvedOn),
-                'Ngày hết hạn': formatDate(job.expiredOn),
-                'Link': job.jobUrl
-            }));
+            const processedJobs = jobs.map(job => {
+                // --- PHẦN BỔ SUNG ĐỂ LẤY NƠI LÀM VIỆC ---
+                let locationText = 'Không xác định';
+                if (job.workingLocations && Array.isArray(job.workingLocations) && job.workingLocations.length > 0) {
+                    // Lấy tên từ mỗi object địa điểm và nối chúng lại
+                    locationText = job.workingLocations.map(loc => loc.locationName).join(', ');
+                }
+                // --- KẾT THÚC PHẦN BỔ SUNG ---
+
+                return {
+                    'Tên công việc': job.jobTitle,
+                    'Tên công ty': job.companyName,
+                    'Nơi làm việc': locationText, // <-- THÊM CỘT MỚI
+                    'Cấp bậc': jobLevelsMap.get(job.jobLevelId) || 'Không xác định',
+                    'Mức lương (VND)': formatSalary(job.salaryMin, job.salaryMax),
+                    'Ngày đăng tin': formatDate(job.approvedOn),
+                    'Ngày hết hạn': formatDate(job.expiredOn),
+                    'Link': job.jobUrl
+                };
+            });
 
             allJobs.push(...processedJobs);
             currentPage++;
@@ -99,12 +112,10 @@ async function scrapeAllJobs(jobLevelsMap) {
     return allJobs;
 }
 
+// --- HÀM CHÍNH ĐIỀU KHIỂN ---
 (async () => {
     const jobLevels = await fetchJobLevels();
     const allJobs = await scrapeAllJobs(jobLevels);
-
-    let jobsCount = 0;
-    let finalFilename = "";
 
     if (allJobs.length > 0) {
         const timestamp = new Date().toLocaleString('vi-VN', {
@@ -113,19 +124,14 @@ async function scrapeAllJobs(jobLevelsMap) {
             timeZone: 'Asia/Ho_Chi_Minh'
         }).replace(/, /g, '_').replace(/\//g, '-').replace(/:/g, '-');
         
-        finalFilename = `data/vietnamworks_${TARGET_KEYWORD.replace(/\s/g, '-')}_${timestamp}.csv`;
-        jobsCount = allJobs.length;
+        const finalFilename = `data/vietnamworks_${TARGET_KEYWORD.replace(/\s/g, '-')}_${timestamp}.csv`;
         
         fs.mkdirSync('data', { recursive: true });
         fs.writeFileSync(finalFilename, '\ufeff' + stringify(allJobs, { header: true }));
         
         console.error(`\n--- BÁO CÁO NHIỆM VỤ ---`);
-        console.error(`Đã tổng hợp ${jobsCount} tin việc làm từ VietnamWorks vào file ${finalFilename}`);
+        console.error(`Đã tổng hợp ${allJobs.length} tin việc làm từ VietnamWorks vào file ${finalFilename}`);
     } else {
         console.error('\nKhông có dữ liệu mới để tổng hợp.');
     }
-
-    // --- GỬI OUTPUT RA CHO WORKFLOW ---
-    setOutput('jobs_count', jobsCount);
-    setOutput('final_filename', finalFilename);
 })();
