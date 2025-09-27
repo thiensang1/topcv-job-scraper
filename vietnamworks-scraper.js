@@ -3,7 +3,7 @@ const axios = require('axios');
 const { stringify } = require('csv-stringify/sync');
 
 // --- CẤU HÌNH ---
-const TARGET_KEYWORD = "kế toán";
+const TARGET_KEYWORD = "";
 const JOBS_PER_PAGE = 50;
 
 // --- API ENDPOINTS ---
