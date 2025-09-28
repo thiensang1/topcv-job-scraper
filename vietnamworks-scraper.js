@@ -10,6 +10,13 @@ const JOBS_PER_PAGE = 50;
 const API_JOB_SEARCH = "https://ms.vietnamworks.com/job-search/v1.0/search";
 const API_META_DATA = "https://ms.vietnamworks.com/meta/v1.0/job-levels";
 
+// --- HÀM HELPER ĐỂ GỬI OUTPUT RA WORKFLOW ---
+function setOutput(name, value) {
+  if (process.env.GITHUB_OUTPUT) {
+    fs.appendFileSync(process.env.GITHUB_OUTPUT, `${name}=${value}\n`);
+  }
+}
+
 // --- HÀM TIỆN ÍCH ---
 function formatSalary(min, max) {
     if (min === 0 && max === 0) return "Thỏa thuận";
@@ -25,7 +32,6 @@ function formatDate(isoString) {
     return isoString.split('T')[0];
 }
 
-// --- GIAI ĐOẠN 1: TẢI DỮ LIỆU META ---
 async function fetchJobLevels() {
     console.error("-> Đang tải dữ liệu meta về cấp bậc công việc...");
     try {
@@ -47,30 +53,26 @@ async function fetchJobLevels() {
     }
 }
 
-// --- GIAI ĐOẠN 2 & 3: KHAI THÁC, TỔNG HỢP ---
 async function scrapeAllJobs(jobLevelsMap) {
     let allJobs = [];
-    let currentPage = 1; 
+    let currentPage = 1;
     let totalPages = 1;
     
     console.error(`\n--- Bắt đầu khai thác dữ liệu cho từ khóa: "${TARGET_KEYWORD}" ---`);
 
-    while (currentPage <= totalPages) { 
+    while (currentPage <= totalPages) {
         try {
             console.error(`Đang khai thác trang ${currentPage}/${totalPages}...`);
             const requestBody = { query: TARGET_KEYWORD };
             const requestOptions = {
-                params: {
-                    pageSize: JOBS_PER_PAGE,
-                    page: currentPage,
-                }
+                params: { pageSize: JOBS_PER_PAGE, page: currentPage }
             };
             const response = await axios.post(API_JOB_SEARCH, requestBody, requestOptions);
 
             const jobs = response.data.data;
             const meta = response.data.meta;
 
-            if (currentPage === 1) {
+            if (currentPage === 1 && meta.nbPages) {
                 totalPages = meta.nbPages;
                 console.error(`Phát hiện có tổng cộng ${meta.nbHits} tin tuyển dụng (${totalPages} trang).`);
             }
@@ -81,20 +83,10 @@ async function scrapeAllJobs(jobLevelsMap) {
             }
 
             const processedJobs = jobs.map(job => {
-                // --- PHẦN CẬP NHẬT LOGIC LẤY ĐỊA CHỈ ---
-                let cityText = 'Không xác định';
-                let addressText = 'Không xác định';
-
+                let locationText = 'Không xác định';
                 if (job.workingLocations && Array.isArray(job.workingLocations) && job.workingLocations.length > 0) {
-                    // Lấy danh sách thành phố duy nhất
-                    const uniqueCities = new Set(job.workingLocations.map(loc => loc.cityNameVI));
-                    cityText = [...uniqueCities].join(', ');
-
-                    // Lấy danh sách địa chỉ cụ thể
-                    addressText = job.workingLocations.map(loc => loc.address).join('; ');
+                    locationText = job.workingLocations.map(loc => loc.locationName).join(', ');
                 }
-                // --- KẾT THÚC PHẦN CẬP NHẬT ---
-
                 return {
                     'Tên công việc': job.jobTitle,
                     'Tên công ty': job.companyName,
@@ -107,7 +99,6 @@ async function scrapeAllJobs(jobLevelsMap) {
                     'Link': job.jobUrl
                 };
             });
-
             allJobs.push(...processedJobs);
             currentPage++;
 
@@ -119,7 +110,6 @@ async function scrapeAllJobs(jobLevelsMap) {
     return allJobs;
 }
 
-// --- HÀM CHÍNH ĐIỀU KHIỂN ---
 (async () => {
     const jobLevels = await fetchJobLevels();
     const allJobs = await scrapeAllJobs(jobLevels);
