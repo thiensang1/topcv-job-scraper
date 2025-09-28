@@ -4,7 +4,7 @@ const fs = require('fs');
 const { stringify } = require('csv-stringify/sync');
 
 // --- CẤU HÌNH ---
-const TARGET_KEYWORD = "kế toán";
+const TARGET_KEYWORD = "";
 const CHROME_PATH = process.env.CHROME_PATH;
 const PROXY_SERVER = process.env.PROXY_URL; // Sử dụng proxy tĩnh nếu có
 
