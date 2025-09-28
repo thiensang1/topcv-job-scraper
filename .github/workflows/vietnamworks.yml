@@ -23,10 +23,9 @@ jobs:
       - name: 'Install project dependencies'
         run: npm install
       
-      # Workflow này không cần cài Chrome và không thiết lập biến môi trường proxy
-      
       - name: 'Run VietnamWorks Scraper'
         id: run_scraper
+        # Không cần env cho proxy nữa
         run: node vietnamworks-scraper.js
       
       - name: 'Commit results to repository'
