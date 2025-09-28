@@ -3,7 +3,7 @@ const axios = require('axios');
 const { stringify } = require('csv-stringify/sync');
 
 // --- CẤU HÌNH ---
-const TARGET_KEYWORD = "";
+const TARGET_KEYWORD = " "; // Để trống để lấy tất cả
 const JOBS_PER_PAGE = 50;
 
 // --- API ENDPOINTS ---
@@ -50,12 +50,12 @@ async function fetchJobLevels() {
 // --- GIAI ĐOẠN 2 & 3: KHAI THÁC, TỔNG HỢP ---
 async function scrapeAllJobs(jobLevelsMap) {
     let allJobs = [];
-    let currentPage = 1; 
+    let currentPage = 1;
     let totalPages = 1;
     
     console.error(`\n--- Bắt đầu khai thác dữ liệu cho từ khóa: "${TARGET_KEYWORD}" ---`);
 
-    while (currentPage <= totalPages) { 
+    while (currentPage <= totalPages) {
         try {
             console.error(`Đang khai thác trang ${currentPage}/${totalPages}...`);
             const requestBody = { query: TARGET_KEYWORD };
@@ -81,18 +81,14 @@ async function scrapeAllJobs(jobLevelsMap) {
             }
 
             const processedJobs = jobs.map(job => {
-                // --- PHẦN BỔ SUNG ĐỂ LẤY NƠI LÀM VIỆC ---
                 let locationText = 'Không xác định';
                 if (job.workingLocations && Array.isArray(job.workingLocations) && job.workingLocations.length > 0) {
-                    // Lấy tên từ mỗi object địa điểm và nối chúng lại
                     locationText = job.workingLocations.map(loc => loc.locationName).join(', ');
                 }
-                // --- KẾT THÚC PHẦN BỔ SUNG ---
-
                 return {
                     'Tên công việc': job.jobTitle,
                     'Tên công ty': job.companyName,
-                    'Nơi làm việc': locationText, // <-- THÊM CỘT MỚI
+                    'Nơi làm việc': locationText,
                     'Cấp bậc': jobLevelsMap.get(job.jobLevelId) || 'Không xác định',
                     'Mức lương (VND)': formatSalary(job.salaryMin, job.salaryMax),
                     'Ngày đăng tin': formatDate(job.approvedOn),
@@ -118,13 +114,19 @@ async function scrapeAllJobs(jobLevelsMap) {
     const allJobs = await scrapeAllJobs(jobLevels);
 
     if (allJobs.length > 0) {
-        const timestamp = new Date().toLocaleString('vi-VN', {
-            year: 'numeric', month: '2-digit', day: '2-digit',
-            hour: '2-digit', minute: '2-digit', hour12: false,
-            timeZone: 'Asia/Ho_Chi_Minh'
-        }).replace(/, /g, '_').replace(/\//g, '-').replace(/:/g, '-');
+        // --- PHẦN SỬA LỖI QUAN TRỌNG ---
+        // Xây dựng chuỗi timestamp một cách an toàn để tránh dấu cách và các ký tự đặc biệt
+        const now = new Date();
+        const year = now.getFullYear();
+        const month = String(now.getMonth() + 1).padStart(2, '0');
+        const day = String(now.getDate()).padStart(2, '0');
+        const hours = String(now.getHours()).padStart(2, '0');
+        const minutes = String(now.getMinutes()).padStart(2, '0');
+        const timestamp = `${day}-${month}-${year}_${hours}-${minutes}`;
+        // --- KẾT THÚC PHẦN SỬA LỖI ---
         
-        const finalFilename = `data/vietnamworks_${TARGET_KEYWORD.replace(/\s/g, '-')}_${timestamp}.csv`;
+        const keywordForFilename = TARGET_KEYWORD.trim() === '' ? 'all' : TARGET_KEYWORD.replace(/\s/g, '-');
+        const finalFilename = `data/vietnamworks_${keywordForFilename}_${timestamp}.csv`;
         
         fs.mkdirSync('data', { recursive: true });
         fs.writeFileSync(finalFilename, '\ufeff' + stringify(allJobs, { header: true }));
