@@ -30,8 +30,6 @@ jobs:
       - name: 'Run Vieclam24h Scraper'
         id: run_scraper
         env:
-          # Cung cấp secrets cho proxy và đường dẫn Chrome
-          # Nếu không có proxy, có thể để trống secrets PROXY_URL
           PROXY_URL: ${{ secrets.PROXY_URL }}
           CHROME_PATH: ${{ steps.setup_chrome.outputs.chrome-path }}
         run: node vieclam24h-scraper.js
@@ -42,3 +40,11 @@ jobs:
         with:
           commit_message: "📊 Dữ liệu Vieclam24h: Thêm ${{ steps.run_scraper.outputs.jobs_count }} tin mới"
           file_pattern: "data/vieclam24h_*.csv"
+
+      # --- BƯỚC MỚI: Tải lên ảnh chụp màn hình nếu có lỗi ---
+      - name: 'Upload error screenshot on failure'
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: error-screenshot
+          path: error_screenshot.png
