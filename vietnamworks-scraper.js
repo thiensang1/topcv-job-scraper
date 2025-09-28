@@ -1,146 +1,154 @@
+// --- ĐIỆP VIÊN VIECLAM24H - PHIÊN BẢN "CHIẾN DỊCH BẢN ĐỒ" ---
+const puppeteer = require('puppeteer-core');
+const cheerio = require('cheerio');
 const fs = require('fs');
-const axios = require('axios');
 const { stringify } = require('csv-stringify/sync');
+const axios = require('axios');
 
 // --- CẤU HÌNH ---
-const TARGET_KEYWORD = "";
-const JOBS_PER_PAGE = 50;
+const SITEMAP_INDEX_URL = "https://vieclam24h.vn/file/sitemap/sitemap-index.xml";
+const CHROME_PATH = process.env.CHROME_PATH;
+const PROXY_API_KEY = process.env.PROXY_API_KEY;
+const PROXY_API_ENDPOINT = process.env.PROXY_API_ENDPOINT;
 
-// --- API ENDPOINTS ---
-const API_JOB_SEARCH = "https://ms.vietnamworks.com/job-search/v1.0/search";
-const API_META_DATA = "https://ms.vietnamworks.com/meta/v1.0/job-levels";
-
-// --- HÀM HELPER ĐỂ GỬI OUTPUT RA WORKFLOW ---
+// --- HÀM HELPER ---
 function setOutput(name, value) {
   if (process.env.GITHUB_OUTPUT) {
     fs.appendFileSync(process.env.GITHUB_OUTPUT, `${name}=${value}\n`);
   }
 }
 
-// --- HÀM TIỆN ÍCH ---
-function formatSalary(min, max) {
-    if (min === 0 && max === 0) return "Thỏa thuận";
-    const format = (num) => new Intl.NumberFormat('vi-VN').format(num);
-    if (min > 0 && max > 0) return `${format(min)} - ${format(max)} VND`;
-    if (min > 0) return `Từ ${format(min)} VND`;
-    if (max > 0) return `Lên đến ${format(max)} VND`;
-    return "Thỏa thuận";
-}
-
-function formatDate(isoString) {
-    if (!isoString) return null;
-    return isoString.split('T')[0];
-}
-
-async function fetchJobLevels() {
-    console.error("-> Đang tải dữ liệu meta về cấp bậc công việc...");
+async function getProxy(apiKey, apiEndpoint) {
+    if (!apiKey || !apiEndpoint) {
+        console.error("-> Cảnh báo: Không có thông tin API Proxy. Chạy không cần proxy.");
+        return null;
+    }
     try {
-        const response = await axios.get(API_META_DATA);
-        const jobLevels = new Map();
-        const levelItems = response.data?.data?.relationships?.data;
-        if (levelItems && Array.isArray(levelItems)) {
-            levelItems.forEach(item => {
-                if (item.id && item.attributes?.nameVi) {
-                    jobLevels.set(item.id, item.attributes.nameVi);
-                }
-            });
+        console.error("-> [V24h-Điệp viên] Đang yêu cầu một danh tính proxy MỚI từ API...");
+        const response = await axios.get(apiEndpoint, {
+            params: { key: apiKey, region: 'random' },
+            timeout: 20000
+        });
+        if (response.data?.success && response.data?.data?.http) {
+            const [host, port] = response.data.data.http.split(':');
+            console.error(`-> [V24h-Điệp viên] Đã nhận proxy mới thành công: ${host}:${port}`);
+            return { host, port };
         }
-        console.error("-> Tải dữ liệu meta thành công!");
-        return jobLevels;
+        throw new Error(`Phản hồi API proxy không như mong đợi.`);
     } catch (error) {
-        console.error("Lỗi khi tải dữ liệu meta:", error.message);
-        return new Map();
+        console.error(`-> [V24h-Điệp viên] Lỗi khi yêu cầu proxy mới: ${error.message}`);
+        return null;
     }
 }
 
-async function scrapeAllJobs(jobLevelsMap) {
-    let allJobs = [];
-    let currentPage = 1;
-    let totalPages = 1;
-    
-    console.error(`\n--- Bắt đầu khai thác dữ liệu cho từ khóa: "${TARGET_KEYWORD}" ---`);
-
-    while (currentPage <= totalPages) {
-        try {
-            console.error(`Đang khai thác trang ${currentPage}/${totalPages}...`);
-            const requestBody = { query: TARGET_KEYWORD };
-            const requestOptions = {
-                params: { pageSize: JOBS_PER_PAGE, page: currentPage }
-            };
-            const response = await axios.post(API_JOB_SEARCH, requestBody, requestOptions);
-
-            const jobs = response.data.data;
-            const meta = response.data.meta;
-
-            if (currentPage === 1 && meta.nbPages) {
-                totalPages = meta.nbPages;
-                console.error(`Phát hiện có tổng cộng ${meta.nbHits} tin tuyển dụng (${totalPages} trang).`);
+// --- GIAI ĐOẠN 1 & 2: ĐỌC SITEMAP ĐỂ LẤY URLS ---
+async function getAllJobUrls() {
+    console.error("--- Giai đoạn 1: Đọc 'bản đồ' sitemap ---");
+    const jobUrls = new Set();
+    try {
+        const indexResponse = await axios.get(SITEMAP_INDEX_URL);
+        const $ = cheerio.load(indexResponse.data, { xmlMode: true });
+        const sitemapUrls = [];
+        $('sitemap loc').each((i, el) => {
+            const url = $(el).text();
+            // Chỉ lấy các sitemap chứa tin tuyển dụng
+            if (url.includes('sitemap-jobs')) {
+                sitemapUrls.push(url);
             }
+        });
 
-            if (!jobs || jobs.length === 0) {
-                console.error("Không có dữ liệu ở trang này, dừng lại.");
-                break;
+        console.error(`--- Giai đoạn 2: Tìm thấy ${sitemapUrls.length} sitemap con. Đang thu thập 'tọa độ' (URL)... ---`);
+        for (const sitemapUrl of sitemapUrls) {
+            try {
+                const sitemapResponse = await axios.get(sitemapUrl);
+                const $$ = cheerio.load(sitemapResponse.data, { xmlMode: true });
+                $$('url loc').each((i, el) => {
+                    jobUrls.add($$(el).text());
+                });
+            } catch (error) {
+                console.error(` -> Lỗi khi đọc sitemap con ${sitemapUrl}: ${error.message}`);
             }
-
-            const processedJobs = jobs.map(job => {
-                let locationText = 'Không xác định';
-                if (job.workingLocations && Array.isArray(job.workingLocations) && job.workingLocations.length > 0) {
-                    cityText = job.workingLocations.map(loc => loc.cityNameVI).join(', ');
-                    addressText = job.workingLocations.map(loc => loc.address).join('; ');
-                }
-                return {
-                    'Tên công việc': job.jobTitle,
-                    'Tên công ty': job.companyName,
-                    'Nơi làm việc': cityText,
-                    'Địa chỉ cụ thể': addressText,
-                    'Cấp bậc': jobLevelsMap.get(job.jobLevelId) || 'Không xác định',
-                    'Mức lương (VND)': formatSalary(job.salaryMin, job.salaryMax),
-                    'Ngày đăng tin': formatDate(job.approvedOn),
-                    'Ngày hết hạn': formatDate(job.expiredOn),
-                    'Link': job.jobUrl
-                };
-            });
-            allJobs.push(...processedJobs);
-            currentPage++;
-
-        } catch (error) {
-            console.error(`Lỗi khi khai thác trang ${currentPage}:`, error.message);
-            break;
         }
+        console.error(`-> Đã thu thập được ${jobUrls.size} URL việc làm duy nhất.`);
+        return Array.from(jobUrls);
+    } catch (error) {
+        console.error("Lỗi nghiêm trọng khi đọc sitemap index:", error.message);
+        return [];
     }
-    return allJobs;
 }
 
+// --- GIAI ĐOẠN 3: TRIỂN KHAI ĐIỆP VIÊN ---
+async function scrapeJobDetails(url, browser) {
+    let page;
+    try {
+        page = await browser.newPage();
+        await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
+
+        const title = await page.$eval('h1.job-title', el => el.innerText.trim()).catch(() => null);
+        const company = await page.$eval('a.company-name', el => el.innerText.trim()).catch(() => null);
+        const salary = await page.$eval('span[data-id="Salary"]', el => el.innerText.trim()).catch(() => "Thỏa thuận");
+        
+        // Nơi làm việc có thể nằm ở nhiều chỗ, thử nhiều selector
+        let location = await page.$eval('div.list-work-place-item span.text-dark-gray', el => el.innerText.trim()).catch(() => null);
+        if (!location) {
+            location = await page.$eval('span[data-id="Location"]', el => el.innerText.trim()).catch(() => "Không xác định");
+        }
+
+        const postedDateText = await page.$eval('span[data-id="PostedDate"]', el => el.innerText.trim()).catch(() => null);
+
+        return {
+            'Tên công việc': title,
+            'Tên công ty': company,
+            'Nơi làm việc': location,
+            'Mức lương': salary,
+            'Ngày đăng tin': postedDateText,
+            'Link': url
+        };
+    } catch (error) {
+        console.error(` -> Lỗi khi cào dữ liệu từ ${url}: ${error.message}`);
+        return null;
+    } finally {
+        if (page) await page.close();
+    }
+}
+
+// --- HÀM CHÍNH ĐIỀU KHIỂN ---
 (async () => {
-    const jobLevels = await fetchJobLevels();
-    const allJobs = await scrapeAllJobs(jobLevels);
+    if (!CHROME_PATH) {
+        throw new Error("Biến môi trường CHROME_PATH không được thiết lập.");
+    }
     
+    const allJobUrls = await getAllJobUrls();
+    let allJobs = [];
     let jobsCount = 0;
     let finalFilename = "";
 
-    if (allJobs.length > 0) {
-        const timestamp = new Date().toLocaleString('vi-VN', {
-            year: 'numeric', month: '2-digit', day: '2-digit',
-            hour: '2-digit', minute: '2-digit', hour12: false,
-            timeZone: 'Asia/Ho_Chi_Minh'
-        }).replace(/, /g, '_').replace(/\//g, '-').replace(/:/g, '-');
+    if (allJobUrls.length > 0) {
+        const proxyInfo = await getProxy(PROXY_API_KEY, PROXY_API_ENDPOINT);
+        const launchOptions = {
+            headless: true,
+            executablePath: CHROME_PATH,
+            args: ['--no-sandbox', '--disable-setuid-sandbox']
+        };
+        if (proxyInfo) {
+            launchOptions.args.push(`--proxy-server=${proxyInfo.host}:${proxyInfo.port}`);
+        }
+
+        console.error(`--- Giai đoạn 3: Khởi tạo trình duyệt và bắt đầu khai thác ${allJobUrls.length} URL... ---`);
+        const browser = await puppeteer.launch(launchOptions);
         
-        const keywordForFilename = TARGET_KEYWORD.trim() === '' ? 'all-jobs' : TARGET_KEYWORD.trim().replace(/\s/g, '-');
-        finalFilename = `data/vietnamworks_${keywordForFilename}_${timestamp}.csv`;
-        jobsCount = allJobs.length;
-        
-        fs.mkdirSync('data', { recursive: true });
-        fs.writeFileSync(finalFilename, '\ufeff' + stringify(allJobs, { header: true }));
-        
-        console.error(`\n--- BÁO CÁO NHIỆM VỤ ---`);
-        console.error(`Đã tổng hợp ${jobsCount} tin việc làm từ VietnamWorks vào file ${finalFilename}`);
-    } else {
-        console.error('\nKhông có dữ liệu mới để tổng hợp.');
+        for (const url of allJobUrls) {
+            const jobData = await scrapeJobDetails(url, browser);
+            if (jobData) {
+                allJobs.push(jobData);
+            }
+        }
+        await browser.close();
     }
 
-    // --- PHẦN BỔ SUNG QUAN TRỌNG ---
-    // Gửi "báo cáo" ra cho GitHub Actions
-    setOutput('jobs_count', jobsCount);
-    setOutput('final_filename', finalFilename);
-    // --- KẾT THÚC BỔ SUNG ---
-})();
+    if (allJobs.length > 0) {
+        const timestamp = new Date().toLocaleString('vi-VN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Asia/Ho_Chi_Minh' }).replace(/, /g, '_').replace(/\//g, '-').replace(/:/g, '-');
+        finalFilename = `data/vieclam24h_sitemap-data_${timestamp}.csv`;
+        jobsCount = allJobs.length;
+        fs.mkdirSync('data', { recursive: true });
+        fs.writeFileSync(finalFilename, '\ufe
