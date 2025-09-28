@@ -30,9 +30,9 @@ jobs:
       - name: 'Run Vieclam24h Scraper'
         id: run_scraper
         env:
-          # Cung cấp secrets cho cả proxy và đường dẫn Chrome
-          PROXY_API_ENDPOINT: ${{ secrets.PROXY_API_ENDPOINT }}
-          PROXY_API_KEY: ${{ secrets.PROXY_API_KEY }}
+          # Cung cấp secrets cho proxy và đường dẫn Chrome
+          # Nếu không có proxy, có thể để trống secrets PROXY_URL
+          PROXY_URL: ${{ secrets.PROXY_URL }}
           CHROME_PATH: ${{ steps.setup_chrome.outputs.chrome-path }}
         run: node vieclam24h-scraper.js
       
