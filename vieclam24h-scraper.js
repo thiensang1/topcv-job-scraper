@@ -1,7 +1,13 @@
-const puppeteer = require('puppeteer-core');
+// --- THAY ĐỔI 1: Gọi puppeteer-extra thay vì puppeteer-core ---
+const puppeteer = require('puppeteer-extra');
+// --- THAY ĐỔI 2: Thêm plugin Stealth ---
+const StealthPlugin = require('puppeteer-extra-plugin-stealth');
 const cheerio = require('cheerio');
 const fs = require('fs');
 const { stringify } = require('csv-stringify/sync');
+
+// --- THAY ĐỔI 3: Kích hoạt plugin ---
+puppeteer.use(StealthPlugin());
 
 // --- CẤU HÌNH ---
 const TARGET_KEYWORD = "kế toán";
@@ -31,10 +37,9 @@ async function getAllJobLinks(browser) {
             console.error(` -> Đang quét trang kết quả: ${currentPage}...`);
             await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
 
-            // --- THAY ĐỔI: Chờ đợi tin tuyển dụng đầu tiên xuất hiện ---
             const jobSelector = 'div.box-job-info h3.title-job a';
             console.error(' -> Đang chờ các link việc làm xuất hiện...');
-            await page.waitForSelector(jobSelector, { timeout: 15000 }); // Chờ tối đa 15 giây
+            await page.waitForSelector(jobSelector, { timeout: 15000 });
             
             const linksOnPage = await page.$$eval(jobSelector, anchors => anchors.map(a => a.href));
             
@@ -56,7 +61,6 @@ async function getAllJobLinks(browser) {
             }
         } catch (error) {
             console.error(` -> Lỗi khi quét trang kết quả ${currentPage}: ${error.message}`);
-            // --- THAY ĐỔI: Chụp ảnh màn hình khi có lỗi ---
             if (page) {
                 await page.screenshot({ path: 'error_screenshot.png' });
                 console.error(' -> Đã chụp ảnh màn hình lỗi vào file error_screenshot.png');
