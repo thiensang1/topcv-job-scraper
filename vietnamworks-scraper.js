@@ -3,12 +3,19 @@ const axios = require('axios');
 const { stringify } = require('csv-stringify/sync');
 
 // --- CẤU HÌNH ---
-const TARGET_KEYWORD = "kế toán"; // Để trống để lấy tất cả
+const TARGET_KEYWORD = "kế toán";
 const JOBS_PER_PAGE = 50;
 
 // --- API ENDPOINTS ---
 const API_JOB_SEARCH = "https://ms.vietnamworks.com/job-search/v1.0/search";
 const API_META_DATA = "https://ms.vietnamworks.com/meta/v1.0/job-levels";
+
+// --- HÀM HELPER ĐỂ GỬI OUTPUT RA WORKFLOW ---
+function setOutput(name, value) {
+  if (process.env.GITHUB_OUTPUT) {
+    fs.appendFileSync(process.env.GITHUB_OUTPUT, `${name}=${value}\n`);
+  }
+}
 
 // --- HÀM TIỆN ÍCH ---
 function formatSalary(min, max) {
@@ -25,7 +32,6 @@ function formatDate(isoString) {
     return isoString.split('T')[0];
 }
 
-// --- GIAI ĐOẠN 1: TẢI DỮ LIỆU META ---
 async function fetchJobLevels() {
     console.error("-> Đang tải dữ liệu meta về cấp bậc công việc...");
     try {
@@ -47,7 +53,6 @@ async function fetchJobLevels() {
     }
 }
 
-// --- GIAI ĐOẠN 2 & 3: KHAI THÁC, TỔNG HỢP ---
 async function scrapeAllJobs(jobLevelsMap) {
     let allJobs = [];
     let currentPage = 1;
@@ -58,19 +63,16 @@ async function scrapeAllJobs(jobLevelsMap) {
     while (currentPage <= totalPages) {
         try {
             console.error(`Đang khai thác trang ${currentPage}/${totalPages}...`);
-            const requestBody = { query: TARGET_KEYWORD.trim() }; // trim() để đảm bảo query rỗng nếu chỉ có dấu cách
+            const requestBody = { query: TARGET_KEYWORD };
             const requestOptions = {
-                params: {
-                    pageSize: JOBS_PER_PAGE,
-                    page: currentPage,
-                }
+                params: { pageSize: JOBS_PER_PAGE, page: currentPage }
             };
             const response = await axios.post(API_JOB_SEARCH, requestBody, requestOptions);
 
             const jobs = response.data.data;
             const meta = response.data.meta;
 
-            if (currentPage === 1) {
+            if (currentPage === 1 && meta.nbPages) {
                 totalPages = meta.nbPages;
                 console.error(`Phát hiện có tổng cộng ${meta.nbHits} tin tuyển dụng (${totalPages} trang).`);
             }
@@ -96,7 +98,6 @@ async function scrapeAllJobs(jobLevelsMap) {
                     'Link': job.jobUrl
                 };
             });
-
             allJobs.push(...processedJobs);
             currentPage++;
 
@@ -108,37 +109,36 @@ async function scrapeAllJobs(jobLevelsMap) {
     return allJobs;
 }
 
-// --- HÀM CHÍNH ĐIỀU KHIỂN ---
 (async () => {
     const jobLevels = await fetchJobLevels();
     const allJobs = await scrapeAllJobs(jobLevels);
+    
+    let jobsCount = 0;
+    let finalFilename = "";
 
     if (allJobs.length > 0) {
-        // --- PHẦN SỬA LỖI QUAN TRỌNG ---
-        // Xây dựng chuỗi timestamp một cách an toàn để tránh dấu cách và các ký tự đặc biệt
-        const now = new Date();
-        const timezoneOffset = 7 * 60; // UTC+7
-        const localDate = new Date(now.getTime() + timezoneOffset * 60000);
-
-        const year = localDate.getUTCFullYear();
-        const month = String(localDate.getUTCMonth() + 1).padStart(2, '0');
-        const day = String(localDate.getUTCDate()).padStart(2, '0');
-        const hours = String(localDate.getUTCHours()).padStart(2, '0');
-        const minutes = String(localDate.getUTCMinutes()).padStart(2, '0');
-        
-        // Nối lại thành chuỗi an toàn, không có dấu cách hay ký tự đặc biệt
-        const timestamp = `${day}-${month}-${year}_${hours}-${minutes}`;
-        // --- KẾT THÚC PHẦN SỬA LỖI ---
+        const timestamp = new Date().toLocaleString('vi-VN', {
+            year: 'numeric', month: '2-digit', day: '2-digit',
+            hour: '2-digit', minute: '2-digit', hour12: false,
+            timeZone: 'Asia/Ho_Chi_Minh'
+        }).replace(/, /g, '_').replace(/\//g, '-').replace(/:/g, '-');
         
         const keywordForFilename = TARGET_KEYWORD.trim() === '' ? 'all-jobs' : TARGET_KEYWORD.trim().replace(/\s/g, '-');
-        const finalFilename = `data/vietnamworks_${keywordForFilename}_${timestamp}.csv`;
+        finalFilename = `data/vietnamworks_${keywordForFilename}_${timestamp}.csv`;
+        jobsCount = allJobs.length;
         
         fs.mkdirSync('data', { recursive: true });
         fs.writeFileSync(finalFilename, '\ufeff' + stringify(allJobs, { header: true }));
         
         console.error(`\n--- BÁO CÁO NHIỆM VỤ ---`);
-        console.error(`Đã tổng hợp ${allJobs.length} tin việc làm từ VietnamWorks vào file ${finalFilename}`);
+        console.error(`Đã tổng hợp ${jobsCount} tin việc làm từ VietnamWorks vào file ${finalFilename}`);
     } else {
         console.error('\nKhông có dữ liệu mới để tổng hợp.');
     }
+
+    // --- PHẦN BỔ SUNG QUAN TRỌNG ---
+    // Gửi "báo cáo" ra cho GitHub Actions
+    setOutput('jobs_count', jobsCount);
+    setOutput('final_filename', finalFilename);
+    // --- KẾT THÚC BỔ SUNG ---
 })();
