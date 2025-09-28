@@ -1,0 +1,34 @@
+name: 'Vieclam24h Daily Scraper'
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Chạy 4 lần mỗi ngày, lệch 2 giờ so với TopCV
+    - cron: '0 2,7,12,19 * * *'
+
+jobs:
+  scrape-vieclam24h:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: 'Checkout repository'
+        uses: actions/checkout@v4
+
+      - name: 'Set up Node.js'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: 'Install project dependencies'
+        run: npm install
+
+      - name: 'Run Vieclam24h Scraper'
+        run: node vieclam24h-scraper.js # <-- Sửa tên file script
+
+      - name: 'Commit results to repository'
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "📊 Dữ liệu Vieclam24h: Thêm file dữ liệu mới"
+          file_pattern: "data/vieclam24h_*.csv" # <-- Sửa mẫu file
