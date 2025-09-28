@@ -123,6 +123,9 @@ async function scrapeAllJobs(jobLevelsMap) {
 (async () => {
     const jobLevels = await fetchJobLevels();
     const allJobs = await scrapeAllJobs(jobLevels);
+    
+    let jobsCount = 0;
+    let finalFilename = "";
 
     if (allJobs.length > 0) {
         const timestamp = new Date().toLocaleString('vi-VN', {
@@ -131,14 +134,22 @@ async function scrapeAllJobs(jobLevelsMap) {
             timeZone: 'Asia/Ho_Chi_Minh'
         }).replace(/, /g, '_').replace(/\//g, '-').replace(/:/g, '-');
         
-        const finalFilename = `data/vietnamworks_${TARGET_KEYWORD.replace(/\s/g, '-')}_${timestamp}.csv`;
+        const keywordForFilename = TARGET_KEYWORD.trim() === '' ? 'all-jobs' : TARGET_KEYWORD.trim().replace(/\s/g, '-');
+        finalFilename = `data/vietnamworks_${keywordForFilename}_${timestamp}.csv`;
+        jobsCount = allJobs.length;
         
         fs.mkdirSync('data', { recursive: true });
         fs.writeFileSync(finalFilename, '\ufeff' + stringify(allJobs, { header: true }));
         
         console.error(`\n--- BÁO CÁO NHIỆM VỤ ---`);
-        console.error(`Đã tổng hợp ${allJobs.length} tin việc làm từ VietnamWorks vào file ${finalFilename}`);
+        console.error(`Đã tổng hợp ${jobsCount} tin việc làm từ VietnamWorks vào file ${finalFilename}`);
     } else {
         console.error('\nKhông có dữ liệu mới để tổng hợp.');
     }
+
+    // --- PHẦN BỔ SUNG QUAN TRỌNG ---
+    // Gửi "báo cáo" ra cho GitHub Actions
+    setOutput('jobs_count', jobsCount);
+    setOutput('final_filename', finalFilename);
+    // --- KẾT THÚC BỔ SUNG ---
 })();
