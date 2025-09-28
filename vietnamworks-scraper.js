@@ -58,7 +58,7 @@ async function scrapeAllJobs(jobLevelsMap) {
     while (currentPage <= totalPages) {
         try {
             console.error(`Đang khai thác trang ${currentPage}/${totalPages}...`);
-            const requestBody = { query: TARGET_KEYWORD };
+            const requestBody = { query: TARGET_KEYWORD.trim() }; // trim() để đảm bảo query rỗng nếu chỉ có dấu cách
             const requestOptions = {
                 params: {
                     pageSize: JOBS_PER_PAGE,
@@ -117,15 +117,20 @@ async function scrapeAllJobs(jobLevelsMap) {
         // --- PHẦN SỬA LỖI QUAN TRỌNG ---
         // Xây dựng chuỗi timestamp một cách an toàn để tránh dấu cách và các ký tự đặc biệt
         const now = new Date();
-        const year = now.getFullYear();
-        const month = String(now.getMonth() + 1).padStart(2, '0');
-        const day = String(now.getDate()).padStart(2, '0');
-        const hours = String(now.getHours()).padStart(2, '0');
-        const minutes = String(now.getMinutes()).padStart(2, '0');
+        const timezoneOffset = 7 * 60; // UTC+7
+        const localDate = new Date(now.getTime() + timezoneOffset * 60000);
+
+        const year = localDate.getUTCFullYear();
+        const month = String(localDate.getUTCMonth() + 1).padStart(2, '0');
+        const day = String(localDate.getUTCDate()).padStart(2, '0');
+        const hours = String(localDate.getUTCHours()).padStart(2, '0');
+        const minutes = String(localDate.getUTCMinutes()).padStart(2, '0');
+        
+        // Nối lại thành chuỗi an toàn, không có dấu cách hay ký tự đặc biệt
         const timestamp = `${day}-${month}-${year}_${hours}-${minutes}`;
         // --- KẾT THÚC PHẦN SỬA LỖI ---
         
-        const keywordForFilename = TARGET_KEYWORD.trim() === '' ? 'all' : TARGET_KEYWORD.replace(/\s/g, '-');
+        const keywordForFilename = TARGET_KEYWORD.trim() === '' ? 'all-jobs' : TARGET_KEYWORD.trim().replace(/\s/g, '-');
         const finalFilename = `data/vietnamworks_${keywordForFilename}_${timestamp}.csv`;
         
         fs.mkdirSync('data', { recursive: true });
