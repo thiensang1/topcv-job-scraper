@@ -5,9 +5,12 @@ const { stringify } = require('csv-stringify/sync');
 // --- CẤU HÌNH ---
 const TARGET_KEYWORD = "kế toán";
 const JOBS_PER_PAGE = 30;
+// --- BỔ SUNG 1: Thêm User-Agent giả mạo ---
+const FAKE_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36';
 
 // --- API ENDPOINT ---
 const API_JOB_SEARCH = "https://apiv2.vieclam24h.vn/employer/fe/job/get-job-list";
+const API_META_DATA = "https://ms.vietnamworks.com/meta/v1.0/job-levels"; // Giữ lại API meta của VNW nếu cần
 
 // --- HÀM TIỆN ÍCH ---
 function formatSalary(salary) {
@@ -18,6 +21,12 @@ function formatSalary(salary) {
 function formatDate(isoString) {
     if (!isoString) return null;
     return isoString.split(' ')[0];
+}
+
+// --- GIAI ĐOẠN 1: TẢI DỮ LIỆU META (Nếu cần, hiện tại script Vieclam24h không dùng) ---
+// Giữ lại hàm này phòng trường hợp sau này cần nối thêm dữ liệu
+async function fetchJobLevels() {
+    return new Map(); // Trả về Map rỗng vì không dùng đến
 }
 
 // --- HÀM CHÍNH ĐIỀU KHIỂN ---
@@ -31,6 +40,8 @@ function formatDate(isoString) {
     while (currentPage <= totalPages) {
         try {
             console.error(`Đang khai thác trang ${currentPage}/${totalPages}...`);
+
+            // --- BỔ SUNG 2: Thêm headers vào yêu cầu API ---
             const response = await axios.get(API_JOB_SEARCH, {
                 params: {
                     q: TARGET_KEYWORD,
@@ -38,6 +49,9 @@ function formatDate(isoString) {
                     per_page: JOBS_PER_PAGE,
                     sort_q: 'priority_max,desc',
                     request_from: 'search_result_web',
+                },
+                headers: {
+                    'User-Agent': FAKE_USER_AGENT
                 }
             });
 
@@ -55,30 +69,22 @@ function formatDate(isoString) {
             }
 
             const processedJobs = jobs.map(job => {
-                // --- PHẦN CẬP NHẬT LOGIC LẤY NƠI LÀM VIỆC ---
                 let locationText = 'Không xác định';
                 try {
-                    // 1. Kiểm tra xem job.places có phải là một chuỗi hợp lệ không
                     if (job.places && typeof job.places === 'string') {
-                        // 2. Dùng JSON.parse() để chuyển chuỗi thành mảng
                         const locationsArray = JSON.parse(job.places);
-
-                        // 3. Kiểm tra kết quả và lấy dữ liệu
                         if (Array.isArray(locationsArray) && locationsArray.length > 0) {
-                            // Lặp qua mảng, lấy ra thuộc tính 'address' và nối chúng lại
                             locationText = locationsArray.map(loc => loc.address).join('; ');
                         }
                     }
                 } catch (e) {
-                    console.error('Lỗi khi phân tích cú pháp (parsing) dữ liệu địa điểm:', e.message);
-                    // Giữ nguyên giá trị mặc định nếu có lỗi
+                    // Bỏ qua lỗi parsing
                 }
-                // --- KẾT THÚC CẬP NHẬT ---
 
                 return {
                     'Tên công việc': job.job_title,
                     'Tên công ty': job.company_name,
-                    'Nơi làm việc': locationText, // Sử dụng địa chỉ đã được xử lý
+                    'Nơi làm việc': locationText,
                     'Mức lương': formatSalary(job.salary_text),
                     'Ngày đăng tin': formatDate(job.updated_at),
                     'Link': job.online_url
@@ -89,7 +95,11 @@ function formatDate(isoString) {
             currentPage++;
 
         } catch (error) {
-            console.error(`Lỗi khi khai thác trang ${currentPage}:`, error.message);
+            if (error.response && error.response.status === 403) {
+                 console.error(`Lỗi 403 Forbidden khi khai thác trang ${currentPage}. Yêu cầu bị từ chối. Script sẽ dừng lại.`);
+            } else {
+                console.error(`Lỗi khi khai thác trang ${currentPage}:`, error.message);
+            }
             break;
         }
     }
