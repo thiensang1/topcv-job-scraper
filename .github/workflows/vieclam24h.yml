@@ -3,7 +3,6 @@ name: 'Vieclam24h Daily Scraper'
 on:
   workflow_dispatch:
   schedule:
-    # Chạy 4 lần mỗi ngày, lệch 2 giờ so với TopCV
     - cron: '0 2,7,12,19 * * *'
 
 jobs:
@@ -11,24 +10,35 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-
+   
     steps:
       - name: 'Checkout repository'
         uses: actions/checkout@v4
-
+          
       - name: 'Set up Node.js'
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-
+          
+      - name: 'Install a stable version of Chrome'
+        id: setup_chrome
+        uses: browser-actions/setup-chrome@latest
+        
       - name: 'Install project dependencies'
         run: npm install
-
+      
       - name: 'Run Vieclam24h Scraper'
-        run: node vieclam24h-scraper.js # <-- Sửa tên file script
-
+        id: run_scraper
+        env:
+          # Cung cấp secrets cho cả proxy và đường dẫn Chrome
+          PROXY_API_ENDPOINT: ${{ secrets.PROXY_API_ENDPOINT }}
+          PROXY_API_KEY: ${{ secrets.PROXY_API_KEY }}
+          CHROME_PATH: ${{ steps.setup_chrome.outputs.chrome-path }}
+        run: node vieclam24h-scraper.js
+      
       - name: 'Commit results to repository'
+        if: steps.run_scraper.outputs.jobs_count > 0
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
-          commit_message: "📊 Dữ liệu Vieclam24h: Thêm file dữ liệu mới"
-          file_pattern: "data/vieclam24h_*.csv" # <-- Sửa mẫu file
+          commit_message: "📊 Dữ liệu Vieclam24h: Thêm ${{ steps.run_scraper.outputs.jobs_count }} tin mới"
+          file_pattern: "data/vieclam24h_*.csv"
