@@ -85,13 +85,14 @@ async function scrapeAllJobs(jobLevelsMap) {
             const processedJobs = jobs.map(job => {
                 let locationText = 'Không xác định';
                 if (job.workingLocations && Array.isArray(job.workingLocations) && job.workingLocations.length > 0) {
-                    locationText = job.workingLocations.map(loc => loc.locationName).join(', ');
+                    cityText = job.workingLocations.map(loc => loc.cityNameVI).join(', ');
+                    addressText = job.workingLocations.map(loc => loc.address).join('; ');
                 }
                 return {
                     'Tên công việc': job.jobTitle,
                     'Tên công ty': job.companyName,
-                    'Nơi làm việc': cityNameVI,
-                    'Địa chỉ cụ thể': address,
+                    'Nơi làm việc': cityText,
+                    'Địa chỉ cụ thể': addressText,
                     'Cấp bậc': jobLevelsMap.get(job.jobLevelId) || 'Không xác định',
                     'Mức lương (VND)': formatSalary(job.salaryMin, job.salaryMax),
                     'Ngày đăng tin': formatDate(job.approvedOn),
