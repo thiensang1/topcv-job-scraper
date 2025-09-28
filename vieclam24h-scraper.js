@@ -4,7 +4,7 @@ const { stringify } = require('csv-stringify/sync');
 
 // --- CẤU HÌNH ---
 const TARGET_KEYWORD = "kế toán";
-const JOBS_PER_PAGE = 30; // Số lượng tin trên mỗi trang, theo URL bạn cung cấp
+const JOBS_PER_PAGE = 30;
 
 // --- API ENDPOINT ---
 const API_JOB_SEARCH = "https://apiv2.vieclam24h.vn/employer/fe/job/get-job-list";
@@ -17,14 +17,14 @@ function formatSalary(salary) {
 
 function formatDate(isoString) {
     if (!isoString) return null;
-    return isoString.split(' ')[0]; // Lấy phần YYYY-MM-DD từ "YYYY-MM-DD HH:mm:ss"
+    return isoString.split(' ')[0];
 }
 
 // --- HÀM CHÍNH ĐIỀU KHIỂN ---
 (async () => {
     let allJobs = [];
     let currentPage = 1;
-    let totalPages = 1; // Giả định ban đầu
+    let totalPages = 1;
 
     console.error(`\n--- Bắt đầu khai thác dữ liệu Vieclam24h cho từ khóa: "${TARGET_KEYWORD}" ---`);
 
@@ -37,7 +37,7 @@ function formatDate(isoString) {
                     page: currentPage,
                     per_page: JOBS_PER_PAGE,
                     sort_q: 'priority_max,desc',
-                    request_from: 'search_result_web', // Giữ lại tham số này có thể quan trọng
+                    request_from: 'search_result_web',
                 }
             });
 
@@ -55,15 +55,32 @@ function formatDate(isoString) {
             }
 
             const processedJobs = jobs.map(job => {
-                // Nối các địa điểm làm việc lại thành một chuỗi
-                const locationText = job.working_places.map(loc => loc.name).join(', ');
+                // --- PHẦN CẬP NHẬT LOGIC LẤY NƠI LÀM VIỆC ---
+                let locationText = 'Không xác định';
+                try {
+                    // 1. Kiểm tra xem job.places có phải là một chuỗi hợp lệ không
+                    if (job.places && typeof job.places === 'string') {
+                        // 2. Dùng JSON.parse() để chuyển chuỗi thành mảng
+                        const locationsArray = JSON.parse(job.places);
+
+                        // 3. Kiểm tra kết quả và lấy dữ liệu
+                        if (Array.isArray(locationsArray) && locationsArray.length > 0) {
+                            // Lặp qua mảng, lấy ra thuộc tính 'address' và nối chúng lại
+                            locationText = locationsArray.map(loc => loc.address).join('; ');
+                        }
+                    }
+                } catch (e) {
+                    console.error('Lỗi khi phân tích cú pháp (parsing) dữ liệu địa điểm:', e.message);
+                    // Giữ nguyên giá trị mặc định nếu có lỗi
+                }
+                // --- KẾT THÚC CẬP NHẬT ---
 
                 return {
                     'Tên công việc': job.job_title,
                     'Tên công ty': job.company_name,
-                    'Nơi làm việc': locationText,
+                    'Nơi làm việc': locationText, // Sử dụng địa chỉ đã được xử lý
                     'Mức lương': formatSalary(job.salary_text),
-                    'Ngày đăng tin': formatDate(job.updated_at), // Dùng updated_at vì posted_at có thể không chính xác
+                    'Ngày đăng tin': formatDate(job.updated_at),
                     'Link': job.online_url
                 };
             });
@@ -73,7 +90,7 @@ function formatDate(isoString) {
 
         } catch (error) {
             console.error(`Lỗi khi khai thác trang ${currentPage}:`, error.message);
-            break; // Dừng lại nếu có lỗi
+            break;
         }
     }
     
