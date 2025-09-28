@@ -90,8 +90,8 @@ async function scrapeAllJobs(jobLevelsMap) {
                 return {
                     'Tên công việc': job.jobTitle,
                     'Tên công ty': job.companyName,
-                    'Nơi làm việc': cityText,
-                    'Địa chỉ cụ thể': addressText,
+                    'Nơi làm việc': cityNameVI,
+                    'Địa chỉ cụ thể': address,
                     'Cấp bậc': jobLevelsMap.get(job.jobLevelId) || 'Không xác định',
                     'Mức lương (VND)': formatSalary(job.salaryMin, job.salaryMax),
                     'Ngày đăng tin': formatDate(job.approvedOn),
