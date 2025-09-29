@@ -20,15 +20,19 @@ jobs:
         with:
           node-version: '20'
           
+      - name: 'Install a stable version of Chrome'
+        id: setup_chrome
+        uses: browser-actions/setup-chrome@latest
+        
       - name: 'Install project dependencies'
         run: npm install
       
       - name: 'Run Vieclam24h Scraper'
         id: run_scraper
-        # --- BỔ SUNG: Cung cấp secrets cho script ---
         env:
-          PROXY_API_ENDPOINT: ${{ secrets.PROXY_API_ENDPOINT }}
-          PROXY_API_KEY: ${{ secrets.PROXY_API_KEY }}
+          # Cung cấp secrets cho proxy (nếu cần) và đường dẫn Chrome
+          PROXY_URL: ${{ secrets.PROXY_URL }}
+          CHROME_PATH: ${{ steps.setup_chrome.outputs.chrome-path }}
         run: node vieclam24h-scraper.js
       
       - name: 'Commit results to repository'
@@ -37,3 +41,11 @@ jobs:
         with:
           commit_message: "📊 Dữ liệu Vieclam24h: Thêm ${{ steps.run_scraper.outputs.jobs_count }} tin mới"
           file_pattern: "data/vieclam24h_*.csv"
+          
+      - name: 'Upload error screenshot'
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: error-screenshot-vieclam24h
+          path: error_screenshot.png
+          retention-days: 1
