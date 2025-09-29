@@ -23,10 +23,12 @@ jobs:
       - name: 'Install project dependencies'
         run: npm install
       
-      # KHÔNG CẦN CÀI ĐẶT CHROME VÀ CÁC BIẾN MÔI TRƯỜNG PHỨC TẠP
-      
       - name: 'Run Vieclam24h Scraper'
         id: run_scraper
+        # --- BỔ SUNG: Cung cấp secrets cho script ---
+        env:
+          PROXY_API_ENDPOINT: ${{ secrets.PROXY_API_ENDPOINT }}
+          PROXY_API_KEY: ${{ secrets.PROXY_API_KEY }}
         run: node vieclam24h-scraper.js
       
       - name: 'Commit results to repository'
