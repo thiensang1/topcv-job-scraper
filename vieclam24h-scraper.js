@@ -1,40 +1,21 @@
-const fs = require('fs');
-const axios = require('axios');
+const puppeteer = require('puppeteer-extra');
+const StealthPlugin = require('puppeteer-extra-plugin-stealth');
 const cheerio = require('cheerio');
+const fs = require('fs');
 const { stringify } = require('csv-stringify/sync');
+
+puppeteer.use(StealthPlugin());
 
 // --- CẤU HÌNH ---
 const TARGET_KEYWORD = "kế toán";
-const FAKE_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36';
+const CHROME_PATH = process.env.CHROME_PATH;
+const PROXY_SERVER = process.env.PROXY_URL; // Sử dụng proxy tĩnh nếu có
 
 // --- HÀM HELPER ---
 function setOutput(name, value) {
   if (process.env.GITHUB_OUTPUT) {
     fs.appendFileSync(process.env.GITHUB_OUTPUT, `${name}=${value}\n`);
   }
-}
-
-async function getProxy(apiKey, apiEndpoint) {
-    if (!apiKey || !apiEndpoint) {
-        console.error("-> Cảnh báo: Không có thông tin API Proxy. Chạy không cần proxy.");
-        return null;
-    }
-    try {
-        console.error("-> [V24h] Đang yêu cầu một danh tính proxy MỚI từ API...");
-        const response = await axios.get(apiEndpoint, {
-            params: { key: apiKey, region: 'random' },
-            timeout: 20000
-        });
-        if (response.data?.success && response.data?.data?.http) {
-            const [host, port] = response.data.data.http.split(':');
-            console.error(`-> [V24h] Đã nhận proxy mới thành công: ${host}:${port}`);
-            return { host, port: parseInt(port, 10), protocol: 'http' };
-        }
-        throw new Error(`Phản hồi API proxy không như mong đợi.`);
-    } catch (error) {
-        console.error(`-> [V24h] Lỗi khi yêu cầu proxy mới: ${error.message}`);
-        return null;
-    }
 }
 
 function formatDate(unixTimestamp) {
@@ -44,89 +25,87 @@ function formatDate(unixTimestamp) {
 
 // --- HÀM CHÍNH ĐIỀU KHIỂN ---
 (async () => {
+    if (!CHROME_PATH) {
+        throw new Error("Biến môi trường CHROME_PATH không được thiết lập.");
+    }
+    
+    const launchOptions = {
+        headless: 'new',
+        executablePath: CHROME_PATH,
+        args: ['--no-sandbox', '--disable-setuid-sandbox']
+    };
+    if (PROXY_SERVER) {
+        console.error(`Đang sử dụng proxy: ${PROXY_SERVER}`);
+        launchOptions.args.push(`--proxy-server=${PROXY_SERVER}`);
+    }
+
+    const browser = await puppeteer.launch(launchOptions);
+    const page = await browser.newPage();
+
     let allJobs = [];
     let jobsCount = 0;
     let finalFilename = "";
-    
-    const proxy = await getProxy(process.env.PROXY_API_KEY, process.env.PROXY_API_ENDPOINT);
-    
+
     try {
         console.error(`--- Bắt đầu chiến dịch "Khai Quật Dữ Liệu" cho từ khóa: "${TARGET_KEYWORD}" ---`);
         
-        let currentPage = 1;
-        let totalPages = 1;
-
-        while (currentPage <= totalPages) {
-            const searchUrl = `https://vieclam24h.vn/tim-kiem-viec-lam-nhanh`;
-            console.error(` -> Đang khai quật trang kết quả: ${currentPage}/${totalPages}...`);
-            
-            const requestOptions = {
-                headers: { 'User-Agent': FAKE_USER_AGENT },
-                proxy: proxy,
-                // --- BỔ SUNG: Thêm các tham số cần thiết ---
-                params: {
-                    q: TARGET_KEYWORD,
-                    page: currentPage,
-                    sort_q: 'priority_max,desc'
-                }
-            };
-
-            const response = await axios.get(searchUrl, requestOptions);
-
-            const $ = cheerio.load(response.data);
-            const nextDataScript = $('#__NEXT_DATA__').html();
-            
-            if (!nextDataScript) {
-                console.error(" -> Không tìm thấy dữ liệu gốc trên trang. Dừng lại.");
-                break;
+        const searchUrl = `https://vieclam24h.vn/tim-kiem-viec-lam-nhanh?q=${encodeURIComponent(TARGET_KEYWORD)}`;
+        console.error(" -> Đang tải dữ liệu trang đích bằng trình duyệt mô phỏng...");
+        
+        await page.goto(searchUrl, { waitUntil: 'domcontentloaded', timeout: 60000 });
+        const content = await page.content();
+        
+        const $ = cheerio.load(content);
+        
+        // Tìm thẻ script chứa dữ liệu gốc
+        let initialState = null;
+        $('script').each((i, el) => {
+            const scriptContent = $(el).html();
+            if (scriptContent && scriptContent.includes('window.__INITIAL_STATE__')) {
+                const jsonString = scriptContent.replace('window.__INITIAL_STATE__=', '').trim().slice(0, -1);
+                initialState = JSON.parse(jsonString);
+                return false;
             }
+        });
+        
+        if (!initialState) {
+            throw new Error("Không tìm thấy dữ liệu gốc 'INITIAL_STATE'.");
+        }
 
-            const jsonData = JSON.parse(nextDataScript);
-            const jobsData = jsonData?.props?.pageProps?.data?.data;
-            const jobs = jobsData?.jobs;
-            
-            if (currentPage === 1 && jobsData?.pagination?.total_pages) {
-                totalPages = jobsData.pagination.total_pages;
-                console.error(` -> Phân tích thành công! Tìm thấy tổng cộng ${jobsData.pagination.total_records} tin (${totalPages} trang).`);
-            }
+        const jobsData = initialState.jobs.jobList.data;
+        const jobs = jobsData?.jobs;
 
-            if (!jobs || jobs.length === 0) {
-                console.error(" -> Không tìm thấy dữ liệu việc làm trong trang này, kết thúc.");
-                break;
-            }
-
-            const processedJobs = jobs.map(job => {
-                let locationText = 'Không xác định';
-                try {
-                    if (job.places && typeof job.places === 'string') {
-                        const locationsArray = JSON.parse(job.places);
-                        if (Array.isArray(locationsArray) && locationsArray.length > 0) {
-                            locationText = locationsArray.map(loc => loc.address).join('; ');
-                        }
+        if (!jobs || jobs.length === 0) {
+            throw new Error("Không tìm thấy danh sách việc làm bên trong dữ liệu gốc.");
+        }
+        
+        allJobs = jobs.map(job => {
+            let locationText = 'Không xác định';
+            try {
+                if (job.places && typeof job.places === 'string') {
+                    const locationsArray = JSON.parse(job.places);
+                    if (Array.isArray(locationsArray) && locationsArray.length > 0) {
+                        locationText = locationsArray.map(loc => loc.address).join('; ');
                     }
-                } catch (e) { /* Bỏ qua lỗi parsing */ }
+                }
+            } catch (e) { /* Bỏ qua lỗi parsing */ }
 
-                return {
-                    'Tên công việc': job.title,
-                    'Tên công ty': job.employer_info.name,
-                    'Nơi làm việc': locationText,
-                    'Mức lương': job.salary_text || 'Thỏa thuận',
-                    'Ngày đăng tin': formatDate(job.approved_at),
-                    'Link': `https://vieclam24h.vn${job.alias_url}`
-                };
-            });
-            
-            allJobs.push(...processedJobs);
-            console.error(` -> Đã khai quật được ${processedJobs.length} tin từ trang ${currentPage}.`);
-            currentPage++;
-        }
-
+            return {
+                'Tên công việc': job.title,
+                'Tên công ty': job.employer_info.name,
+                'Nơi làm việc': locationText,
+                'Mức lương': job.salary_text || 'Thỏa thuận',
+                'Ngày đăng tin': formatDate(job.approved_at),
+                'Link': `https://vieclam24h.vn${job.alias_url}`
+            };
+        });
+        
     } catch (error) {
-        let errorMessage = error.message;
-        if (error.response) {
-            errorMessage = `Request failed with status code ${error.response.status}`;
-        }
-        console.error(`Lỗi nghiêm trọng trong chiến dịch: ${errorMessage}`);
+        console.error(`Lỗi nghiêm trọng trong chiến dịch: ${error.message}`);
+        await page.screenshot({ path: 'error_screenshot.png' });
+        console.error(' -> Đã chụp ảnh màn hình lỗi vào file error_screenshot.png');
+    } finally {
+        if(browser) await browser.close();
     }
 
     if (allJobs.length > 0) {
