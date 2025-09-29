@@ -1,11 +1,15 @@
-const fs = require('fs');
-const axios = require('axios');
+const puppeteer = require('puppeteer-extra');
+const StealthPlugin = require('puppeteer-extra-plugin-stealth');
 const cheerio = require('cheerio');
+const fs = require('fs');
 const { stringify } = require('csv-stringify/sync');
+
+puppeteer.use(StealthPlugin());
 
 // --- CẤU HÌNH ---
 const TARGET_KEYWORD = "kế toán";
-const FAKE_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36';
+const CHROME_PATH = process.env.CHROME_PATH;
+const PROXY_SERVER = process.env.PROXY_URL;
 
 // --- HÀM HELPER ---
 function setOutput(name, value) {
@@ -13,114 +17,152 @@ function setOutput(name, value) {
     fs.appendFileSync(process.env.GITHUB_OUTPUT, `${name}=${value}\n`);
   }
 }
+const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-// --- HÀM LẤY PROXY (TÁI SỬ DỤNG TỪ SCRIPT TOPCV) ---
-async function getProxy(apiKey, apiEndpoint) {
-    if (!apiKey || !apiEndpoint) {
-        console.error("-> Cảnh báo: Không có thông tin API Proxy. Chạy không cần proxy.");
-        return null;
-    }
-    try {
-        console.error("-> [V24h] Đang yêu cầu một danh tính proxy MỚI từ API...");
-        const response = await axios.get(apiEndpoint, {
-            params: { key: apiKey, region: 'random' },
-            timeout: 20000
-        });
-        if (response.data?.success && response.data?.data?.http) {
-            const [host, port] = response.data.data.http.split(':');
-            console.error(`-> [V24h] Đã nhận proxy mới thành công: ${host}:${port}`);
-            return { host, port: parseInt(port, 10), protocol: 'http' };
-        }
-        throw new Error(`Phản hồi API proxy không như mong đợi.`);
-    } catch (error) {
-        console.error(`-> [V24h] Lỗi khi yêu cầu proxy mới: ${error.message}`);
-        return null;
-    }
-}
-
-function formatDate(unixTimestamp) {
-    if (!unixTimestamp) return null;
-    return new Date(unixTimestamp * 1000).toISOString().split('T')[0];
-}
-
-// --- HÀM CHÍNH ĐIỀU KHIỂN ---
-async function scrapeVieclam24h() {
-    let allJobs = [];
-    let jobsCount = 0;
-    let finalFilename = "";
+// --- GIAI ĐOẠN 1: THU THẬP TẤT CẢ LINKS VIỆC LÀM ---
+async function getAllJobLinks(browser) {
+    const allLinks = new Set();
+    let currentPage = 1;
+    let hasNextPage = true;
     
-    // Lấy proxy ngay từ đầu
-    const proxy = await getProxy(process.env.PROXY_API_KEY, process.env.PROXY_API_ENDPOINT);
+    console.error(`--- Giai đoạn 1: Bắt đầu thu thập link việc làm cho từ khóa "${TARGET_KEYWORD}" ---`);
 
-    try {
-        console.error(`--- Bắt đầu chiến dịch "Khai Quật Dữ Liệu" cho từ khóa: "${TARGET_KEYWORD}" ---`);
-        
-        let currentPage = 1;
-        let totalPages = 1;
+    while (hasNextPage) {
+        let page;
+        try {
+            page = await browser.newPage();
+            await page.setExtraHTTPHeaders({ 'Accept-Language': 'en-US,en;q=0.9,vi;q=0.8' });
+            await page.setViewport({ width: 1920, height: 1080 });
 
-        while (currentPage <= totalPages) {
-            const searchUrl = `https://vieclam24h.vn/tim-kiem-viec-lam-nhanh?q=${encodeURIComponent(TARGET_KEYWORD)}&page=${currentPage}`;
-            console.error(` -> Đang khai quật trang kết quả: ${currentPage}/${totalPages}...`);
+            const url = `https://vieclam24h.vn/tim-kiem-viec-lam-nhanh?q=${encodeURIComponent(TARGET_KEYWORD)}&page=${currentPage}`;
+            console.error(` -> Đang quét trang kết quả: ${currentPage}...`);
+            await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
+
+            const jobSelector = 'div.box-job-info h3.title-job a';
+            console.error(' -> Đang chờ các link việc làm xuất hiện...');
+            await page.waitForSelector(jobSelector, { timeout: 15000 });
             
-            const requestOptions = {
-                headers: { 'User-Agent': FAKE_USER_AGENT },
-                proxy: proxy // <-- SỬ DỤNG PROXY CHO AXIOS
-            };
-
-            const response = await axios.get(searchUrl, requestOptions);
-            const $ = cheerio.load(response.data);
-            const nextDataScript = $('#__NEXT_DATA__').html();
+            await page.mouse.move(Math.random() * 800 + 100, Math.random() * 600 + 100);
             
-            if (!nextDataScript) { throw new Error("Không tìm thấy kho báu '__NEXT_DATA__'."); }
-
-            const jsonData = JSON.parse(nextDataScript);
-            const jobsData = jsonData?.props?.initialState?.jobs?.jobList?.data;
-            const jobs = jobsData?.jobs;
+            const linksOnPage = await page.$$eval(jobSelector, anchors => anchors.map(a => a.href));
             
-            if (currentPage === 1) {
-                totalPages = jobsData?.pagination?.total_pages || 1;
-                console.error(` -> Phân tích thành công! Tổng số trang cần khai quật: ${totalPages}`);
-            }
-
-            if (!jobs || jobs.length === 0) {
-                console.error(" -> Không tìm thấy dữ liệu việc làm trong trang này, kết thúc.");
+            if (linksOnPage.length === 0) {
+                hasNextPage = false;
+                console.error(" -> Không tìm thấy link nào, kết thúc giai đoạn 1.");
                 break;
             }
 
-            const processedJobs = jobs.map(job => {
-                let locationText = 'Không xác định';
-                try {
-                    if (job.places && typeof job.places === 'string') {
-                        const locationsArray = JSON.parse(job.places);
-                        if (Array.isArray(locationsArray) && locationsArray.length > 0) {
-                            locationText = locationsArray.map(loc => loc.address).join('; ');
-                        }
-                    }
-                } catch (e) { /* Bỏ qua lỗi parsing */ }
-                return {
-                    'Tên công việc': job.title,
-                    'Tên công ty': job.employer_info.name,
-                    'Nơi làm việc': locationText,
-                    'Mức lương': job.salary_text || 'Thỏa thuận',
-                    'Ngày đăng tin': formatDate(job.approved_at),
-                    'Link': `https://vieclam24h.vn${job.alias_url}`
-                };
-            });
+            linksOnPage.forEach(link => allLinks.add(link));
+            console.error(` -> Thu thập được ${linksOnPage.length} link. Tổng số link: ${allLinks.size}`);
             
-            allJobs.push(...processedJobs);
-            console.error(` -> Đã khai quật được ${processedJobs.length} tin từ trang ${currentPage}.`);
-            currentPage++;
+            const nextPageButton = await page.$('a.page-link[aria-label="Next"]');
+            if (!nextPageButton) {
+                hasNextPage = false;
+                console.error(" -> Hết trang, kết thúc giai đoạn 1.");
+            } else {
+                currentPage++;
+            }
+        } catch (error) {
+            console.error(` -> Lỗi khi quét trang kết quả ${currentPage}: ${error.message}`);
+            if (page) {
+                await page.screenshot({ path: 'error_screenshot.png' });
+                console.error(' -> Đã chụp ảnh màn hình lỗi vào file error_screenshot.png');
+            }
+            hasNextPage = false;
+        } finally {
+            if (page) await page.close();
         }
+    }
+    return Array.from(allLinks);
+}
+
+// --- GIAI ĐOẠN 2: KHAI THÁC DỮ LIỆU CHI TIẾT TỪ LINK ---
+async function scrapeJobDetails(url, browser) {
+    let page;
+    try {
+        page = await browser.newPage();
+        await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
+        const content = await page.content();
+        const $ = cheerio.load(content);
+        const title = $('h1.job-title').text().trim() || null;
+        const company = $('a.company-name').text().trim() || null;
+        const salary = $('span[data-id="Salary"]').text().trim() || 'Thỏa thuận';
+        let location = await page.$eval('div.list-work-place-item span.text-dark-gray', el => el.innerText.trim()).catch(() => null);
+        if (!location) {
+            location = $('span[data-id="Location"]').text().trim() || 'Không xác định';
+        }
+        const postedDateText = $('span[data-id="PostedDate"]').text().trim() || null;
+        return {
+            'Tên công việc': title, 'Tên công ty': company, 'Nơi làm việc': location, 
+            'Mức lương': salary, 'Ngày đăng tin': postedDateText, 'Link': url
+        };
     } catch (error) {
-        let errorMessage = error.message;
-        if (error.response) {
-            errorMessage = `Request failed with status code ${error.response.status}`;
-        }
-        console.error(`Lỗi nghiêm trọng trong chiến dịch: ${errorMessage}`);
+        console.error(` -> Lỗi khi cào dữ liệu từ ${url}: ${error.message}`);
+        return null;
+    } finally {
+        if (page) await page.close();
+    }
+}
+
+// --- HÀM CHÍNH ĐIỀU KHIỂN ---
+(async () => {
+    if (!CHROME_PATH) {
+        throw new Error("Biến môi trường CHROME_PATH không được thiết lập.");
+    }
+    
+    const launchOptions = {
+        headless: 'new',
+        executablePath: CHROME_PATH,
+        args: ['--no-sandbox', '--disable-setuid-sandbox']
+    };
+    if (PROXY_SERVER) {
+        console.error(`Đang sử dụng proxy: ${PROXY_SERVER}`);
+        launchOptions.args.push(`--proxy-server=${PROXY_SERVER}`);
     }
 
+    const browser = await puppeteer.launch(launchOptions);
+    let allJobs = [];
+    let jobsCount = 0;
+    let finalFilename = "";
+
+    try {
+        console.error("\n--- [Điệp viên] Bắt đầu giai đoạn Khởi Động (Warm-up)... ---");
+        const warmupPage = await browser.newPage();
+        await warmupPage.goto('https://vieclam24h.vn/', { waitUntil: 'domcontentloaded' });
+        console.error(" -> Đã truy cập trang chủ, đang chờ...");
+        await sleep(3000);
+        await warmupPage.mouse.move(Math.random() * 500 + 100, Math.random() * 500 + 100);
+        
+        try {
+            const acceptButtonSelector = '#onetrust-accept-btn-handler';
+            await warmupPage.waitForSelector(acceptButtonSelector, { timeout: 5000 });
+            await warmupPage.click(acceptButtonSelector);
+            console.error(" -> Đã chấp nhận cookies.");
+        } catch(e) {
+            console.error(" -> Không tìm thấy nút cookies hoặc đã được chấp nhận.");
+        }
+        
+        await warmupPage.close();
+        console.error("--- Khởi động hoàn tất, bắt đầu nhiệm vụ chính. ---\n");
+
+        const allJobUrls = await getAllJobLinks(browser);
+        
+        if (allJobUrls.length > 0) {
+            console.error(`\n--- Giai đoạn 2: Bắt đầu khai thác chi tiết ${allJobUrls.length} việc làm ---`);
+            for (let i = 0; i < allJobUrls.length; i++) {
+                console.error(` -> Đang khai thác link ${i + 1}/${allJobUrls.length}...`);
+                const jobData = await scrapeJobDetails(allJobUrls[i], browser);
+                if (jobData) allJobs.push(jobData);
+            }
+        }
+    } catch(error) {
+        console.error(`Lỗi nghiêm trọng trong quá trình chạy: ${error.message}`);
+    } finally {
+        if (browser) await browser.close();
+    }
+    
     if (allJobs.length > 0) {
-        const timestamp = new Date().toLocaleString('vi-VN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Asia/Ho_Chi_Minh' }).replace(/, /g, '_').replace(/\//g, '-').replace(/:/g, '-');
+        const timestamp = new Date().toLocaleString('vi-VN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Asia/Ho-Chi-Minh' }).replace(/, /g, '_').replace(/\//g, '-').replace(/:/g, '-');
         finalFilename = `data/vieclam24h_${TARGET_KEYWORD.replace(/\s/g, '-')}_${timestamp}.csv`;
         jobsCount = allJobs.length;
         fs.mkdirSync('data', { recursive: true });
@@ -130,7 +172,7 @@ async function scrapeVieclam24h() {
     } else {
         console.error('\nKhông có dữ liệu mới để tổng hợp.');
     }
-
+    
     setOutput('jobs_count', jobsCount);
     setOutput('final_filename', finalFilename);
 })();
