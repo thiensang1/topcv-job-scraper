@@ -23,7 +23,7 @@ jobs:
       - name: 'Install project dependencies'
         run: npm install
       
-      # KHÔNG CẦN CÀI ĐẶT CHROME VÀ KHÔNG CẦN PROXY
+      # KHÔNG CẦN CÀI ĐẶT CHROME VÀ CÁC BIẾN MÔI TRƯỜNG PHỨC TẠP
       
       - name: 'Run Vieclam24h Scraper'
         id: run_scraper
