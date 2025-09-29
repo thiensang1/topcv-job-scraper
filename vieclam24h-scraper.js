@@ -14,7 +14,6 @@ function setOutput(name, value) {
   }
 }
 
-// --- HÀM LẤY PROXY (Tái sử dụng từ script TopCV) ---
 async function getProxy(apiKey, apiEndpoint) {
     if (!apiKey || !apiEndpoint) {
         console.error("-> Cảnh báo: Không có thông tin API Proxy. Chạy không cần proxy.");
@@ -38,6 +37,10 @@ async function getProxy(apiKey, apiEndpoint) {
     }
 }
 
+function formatDate(unixTimestamp) {
+    if (!unixTimestamp) return null;
+    return new Date(unixTimestamp * 1000).toISOString().split('T')[0];
+}
 
 // --- HÀM CHÍNH ĐIỀU KHIỂN ---
 (async () => {
@@ -45,60 +48,85 @@ async function getProxy(apiKey, apiEndpoint) {
     let jobsCount = 0;
     let finalFilename = "";
     
-    // Lấy proxy ngay từ đầu
     const proxy = await getProxy(process.env.PROXY_API_KEY, process.env.PROXY_API_ENDPOINT);
-
+    
     try {
         console.error(`--- Bắt đầu chiến dịch "Khai Quật Dữ Liệu" cho từ khóa: "${TARGET_KEYWORD}" ---`);
-        const searchUrl = `https://vieclam24h.vn/tim-kiem-viec-lam-nhanh?q=${encodeURIComponent(TARGET_KEYWORD)}`;
         
-        console.error(" -> Đang tải dữ liệu trang đích...");
-        
-        // Tạo cấu hình request, bao gồm cả proxy và user-agent
-        const requestOptions = {
-            headers: { 'User-Agent': FAKE_USER_AGENT },
-            proxy: proxy // <-- SỬ DỤNG PROXY CHO AXIOS
-        };
+        let currentPage = 1;
+        let totalPages = 1;
 
-        const response = await axios.get(searchUrl, requestOptions);
-
-        const $ = cheerio.load(response.data);
-        const nextDataScript = $('#__NEXT_DATA__').html();
-        
-        if (!nextDataScript) {
-            throw new Error("Không tìm thấy kho báu '__NEXT_DATA__'.");
-        }
-
-        const jsonData = JSON.parse(nextDataScript);
-        const jobs = jsonData?.props?.pageProps?.data?.data?.jobs;
-
-        if (!jobs || jobs.length === 0) {
-            throw new Error("Không tìm thấy danh sách việc làm bên trong '__NEXT_DATA__'.");
-        }
-        
-        allJobs = jobs.map(job => {
-            let locationText = 'Không xác định';
-            try {
-                if (job.places && typeof job.places === 'string') {
-                    const locationsArray = JSON.parse(job.places);
-                    if (Array.isArray(locationsArray) && locationsArray.length > 0) {
-                        locationText = locationsArray.map(loc => loc.address).join('; ');
-                    }
+        while (currentPage <= totalPages) {
+            const searchUrl = `https://vieclam24h.vn/tim-kiem-viec-lam-nhanh`;
+            console.error(` -> Đang khai quật trang kết quả: ${currentPage}/${totalPages}...`);
+            
+            const requestOptions = {
+                headers: { 'User-Agent': FAKE_USER_AGENT },
+                proxy: proxy,
+                // --- BỔ SUNG: Thêm các tham số cần thiết ---
+                params: {
+                    q: TARGET_KEYWORD,
+                    page: currentPage,
+                    sort_q: 'priority_max,desc'
                 }
-            } catch (e) { /* Bỏ qua lỗi parsing */ }
-
-            return {
-                'Tên công việc': job.job_title,
-                'Tên công ty': job.company_name,
-                'Nơi làm việc': locationText,
-                'Mức lương': job.salary_text || 'Thỏa thuận',
-                'Ngày đăng tin': job.updated_at ? job.updated_at.split(' ')[0] : null,
-                'Link': job.online_url
             };
-        });
+
+            const response = await axios.get(searchUrl, requestOptions);
+
+            const $ = cheerio.load(response.data);
+            const nextDataScript = $('#__NEXT_DATA__').html();
+            
+            if (!nextDataScript) {
+                console.error(" -> Không tìm thấy dữ liệu gốc trên trang. Dừng lại.");
+                break;
+            }
+
+            const jsonData = JSON.parse(nextDataScript);
+            const jobsData = jsonData?.props?.pageProps?.data?.data;
+            const jobs = jobsData?.jobs;
+            
+            if (currentPage === 1 && jobsData?.pagination?.total_pages) {
+                totalPages = jobsData.pagination.total_pages;
+                console.error(` -> Phân tích thành công! Tìm thấy tổng cộng ${jobsData.pagination.total_records} tin (${totalPages} trang).`);
+            }
+
+            if (!jobs || jobs.length === 0) {
+                console.error(" -> Không tìm thấy dữ liệu việc làm trong trang này, kết thúc.");
+                break;
+            }
+
+            const processedJobs = jobs.map(job => {
+                let locationText = 'Không xác định';
+                try {
+                    if (job.places && typeof job.places === 'string') {
+                        const locationsArray = JSON.parse(job.places);
+                        if (Array.isArray(locationsArray) && locationsArray.length > 0) {
+                            locationText = locationsArray.map(loc => loc.address).join('; ');
+                        }
+                    }
+                } catch (e) { /* Bỏ qua lỗi parsing */ }
+
+                return {
+                    'Tên công việc': job.title,
+                    'Tên công ty': job.employer_info.name,
+                    'Nơi làm việc': locationText,
+                    'Mức lương': job.salary_text || 'Thỏa thuận',
+                    'Ngày đăng tin': formatDate(job.approved_at),
+                    'Link': `https://vieclam24h.vn${job.alias_url}`
+                };
+            });
+            
+            allJobs.push(...processedJobs);
+            console.error(` -> Đã khai quật được ${processedJobs.length} tin từ trang ${currentPage}.`);
+            currentPage++;
+        }
 
     } catch (error) {
-        console.error(`Lỗi nghiêm trọng trong chiến dịch: ${error.message}`);
+        let errorMessage = error.message;
+        if (error.response) {
+            errorMessage = `Request failed with status code ${error.response.status}`;
+        }
+        console.error(`Lỗi nghiêm trọng trong chiến dịch: ${errorMessage}`);
     }
 
     if (allJobs.length > 0) {
