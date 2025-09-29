@@ -41,9 +41,10 @@ jobs:
           commit_message: "📊 Dữ liệu Vieclam24h: Thêm ${{ steps.run_scraper.outputs.jobs_count }} tin mới"
           file_pattern: "data/vieclam24h_*.csv"
           
-      - name: 'Upload error screenshot on failure'
-        if: failure()
+      - name: 'Upload error screenshot' # Đổi tên và sửa điều kiện
+        if: always() # Luôn chạy bước này để lưu lại bằng chứng
         uses: actions/upload-artifact@v4
         with:
           name: error-screenshot-vieclam24h
           path: error_screenshot.png
+          retention-days: 1 # Chỉ lưu lại trong 1 ngày
