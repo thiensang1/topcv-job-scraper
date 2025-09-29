@@ -14,58 +14,69 @@ function setOutput(name, value) {
   }
 }
 
-// Chuyển đổi Unix timestamp (tính bằng giây) sang định dạng YYYY-MM-DD
-function formatDate(unixTimestamp) {
-    if (!unixTimestamp) return null;
-    return new Date(unixTimestamp * 1000).toISOString().split('T')[0];
+// --- HÀM LẤY PROXY (Tái sử dụng từ script TopCV) ---
+async function getProxy(apiKey, apiEndpoint) {
+    if (!apiKey || !apiEndpoint) {
+        console.error("-> Cảnh báo: Không có thông tin API Proxy. Chạy không cần proxy.");
+        return null;
+    }
+    try {
+        console.error("-> [V24h] Đang yêu cầu một danh tính proxy MỚI từ API...");
+        const response = await axios.get(apiEndpoint, {
+            params: { key: apiKey, region: 'random' },
+            timeout: 20000
+        });
+        if (response.data?.success && response.data?.data?.http) {
+            const [host, port] = response.data.data.http.split(':');
+            console.error(`-> [V24h] Đã nhận proxy mới thành công: ${host}:${port}`);
+            return { host, port: parseInt(port, 10), protocol: 'http' };
+        }
+        throw new Error(`Phản hồi API proxy không như mong đợi.`);
+    } catch (error) {
+        console.error(`-> [V24h] Lỗi khi yêu cầu proxy mới: ${error.message}`);
+        return null;
+    }
 }
+
 
 // --- HÀM CHÍNH ĐIỀU KHIỂN ---
 (async () => {
     let allJobs = [];
     let jobsCount = 0;
     let finalFilename = "";
+    
+    // Lấy proxy ngay từ đầu
+    const proxy = await getProxy(process.env.PROXY_API_KEY, process.env.PROXY_API_ENDPOINT);
 
     try {
-        console.error(`--- Bắt đầu chiến dịch "Giải Mã Dữ Liệu" cho từ khóa: "${TARGET_KEYWORD}" ---`);
+        console.error(`--- Bắt đầu chiến dịch "Khai Quật Dữ Liệu" cho từ khóa: "${TARGET_KEYWORD}" ---`);
+        const searchUrl = `https://vieclam24h.vn/tim-kiem-viec-lam-nhanh?q=${encodeURIComponent(TARGET_KEYWORD)}`;
         
-        // Chỉ cần lấy trang đầu tiên để tìm dữ liệu và tổng số trang
-        const firstPageUrl = `https://vieclam24h.vn/tim-kiem-viec-lam-nhanh?q=${encodeURIComponent(TARGET_KEYWORD)}`;
         console.error(" -> Đang tải dữ liệu trang đích...");
         
-        const response = await axios.get(firstPageUrl, {
-            headers: { 'User-Agent': FAKE_USER_AGENT }
-        });
+        // Tạo cấu hình request, bao gồm cả proxy và user-agent
+        const requestOptions = {
+            headers: { 'User-Agent': FAKE_USER_AGENT },
+            proxy: proxy // <-- SỬ DỤNG PROXY CHO AXIOS
+        };
+
+        const response = await axios.get(searchUrl, requestOptions);
 
         const $ = cheerio.load(response.data);
+        const nextDataScript = $('#__NEXT_DATA__').html();
         
-        // Tìm thẻ script chứa dữ liệu gốc
-        let initialState = null;
-        $('script').each((i, el) => {
-            const scriptContent = $(el).html();
-            if (scriptContent && scriptContent.includes('window.__INITIAL_STATE__')) {
-                // Tách chuỗi JSON từ bên trong biến JavaScript
-                const jsonString = scriptContent.replace('window.__INITIAL_STATE__=', '').trim().slice(0, -1);
-                initialState = JSON.parse(jsonString);
-                return false; // Dừng vòng lặp khi đã tìm thấy
-            }
-        });
-        
-        if (!initialState) {
-            throw new Error("Không tìm thấy dữ liệu gốc 'INITIAL_STATE'. Cấu trúc trang web có thể đã thay đổi.");
+        if (!nextDataScript) {
+            throw new Error("Không tìm thấy kho báu '__NEXT_DATA__'.");
         }
 
-        const jobsData = initialState.jobs.jobList.data;
-        const totalRecords = jobsData.total_records;
+        const jsonData = JSON.parse(nextDataScript);
+        const jobs = jsonData?.props?.pageProps?.data?.data?.jobs;
 
-        if (!jobsData.jobs || jobsData.jobs.length === 0) {
-            throw new Error("Không tìm thấy danh sách việc làm bên trong dữ liệu gốc.");
+        if (!jobs || jobs.length === 0) {
+            throw new Error("Không tìm thấy danh sách việc làm bên trong '__NEXT_DATA__'.");
         }
         
-        console.error(` -> Giải mã thành công! Tìm thấy tổng cộng ${totalRecords} tin tuyển dụng.`);
-        
-        // Xử lý dữ liệu đã có từ trang đầu tiên
-        const processedJobs = jobsData.jobs.map(job => {
+        allJobs = jobs.map(job => {
             let locationText = 'Không xác định';
             try {
                 if (job.places && typeof job.places === 'string') {
@@ -77,20 +88,14 @@ function formatDate(unixTimestamp) {
             } catch (e) { /* Bỏ qua lỗi parsing */ }
 
             return {
-                'Tên công việc': job.title,
-                'Tên công ty': job.employer_info.name,
+                'Tên công việc': job.job_title,
+                'Tên công ty': job.company_name,
                 'Nơi làm việc': locationText,
                 'Mức lương': job.salary_text || 'Thỏa thuận',
-                'Ngày đăng tin': formatDate(job.approved_at),
-                'Link': `https://vieclam24h.vn${job.alias_url}`
+                'Ngày đăng tin': job.updated_at ? job.updated_at.split(' ')[0] : null,
+                'Link': job.online_url
             };
         });
-        
-        allJobs.push(...processedJobs);
-        
-        // (Tùy chọn) Hiện tại chúng ta mới chỉ lấy dữ liệu từ trang đầu tiên vì nó đã được nhúng sẵn.
-        // Để lấy các trang sau, cần phải phân tích các request API mà trang web gọi khi người dùng chuyển trang.
-        // Tuy nhiên, cách làm này đã lấy được một lượng lớn dữ liệu ban đầu một cách hiệu quả.
 
     } catch (error) {
         console.error(`Lỗi nghiêm trọng trong chiến dịch: ${error.message}`);
