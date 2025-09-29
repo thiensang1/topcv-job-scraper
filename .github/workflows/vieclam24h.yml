@@ -20,19 +20,13 @@ jobs:
         with:
           node-version: '20'
           
-      - name: 'Install a stable version of Chrome'
-        id: setup_chrome
-        uses: browser-actions/setup-chrome@latest
-        
       - name: 'Install project dependencies'
         run: npm install
       
+      # KHÔNG CẦN CÀI ĐẶT CHROME VÀ KHÔNG CẦN PROXY
+      
       - name: 'Run Vieclam24h Scraper'
         id: run_scraper
-        env:
-          # Cung cấp secrets cho proxy (nếu cần) và đường dẫn Chrome
-          PROXY_URL: ${{ secrets.PROXY_URL }}
-          CHROME_PATH: ${{ steps.setup_chrome.outputs.chrome-path }}
         run: node vieclam24h-scraper.js
       
       - name: 'Commit results to repository'
