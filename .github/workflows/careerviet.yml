@@ -3,7 +3,6 @@ name: 'CareerViet Daily Scraper'
 on:
   workflow_dispatch:
   schedule:
-    # Chạy 4 lần mỗi ngày, lệch 3 giờ so với TopCV
     - cron: '0 3,8,13,20 * * *'
 
 jobs:
@@ -11,26 +10,42 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-
+   
     steps:
       - name: 'Checkout repository'
         uses: actions/checkout@v4
-
+              
       - name: 'Set up Node.js'
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-
+          
+      - name: 'Install a stable version of Chrome'
+        id: setup_chrome
+        uses: browser-actions/setup-chrome@latest
+        
       - name: 'Install project dependencies'
         run: npm install
-
+      
       - name: 'Run CareerViet Scraper'
         id: run_scraper
+        env:
+          # Cung cấp secrets cho proxy (nếu có) và đường dẫn Chrome
+          PROXY_URL: ${{ secrets.PROXY_URL_STATIC }} # Gợi ý dùng proxy tĩnh nếu có
+          CHROME_PATH: ${{ steps.setup_chrome.outputs.chrome-path }}
         run: node careerviet-scraper.js
-
+      
       - name: 'Commit results to repository'
         if: steps.run_scraper.outputs.jobs_count > 0
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
           commit_message: "📊 Dữ liệu CareerViet: Thêm ${{ steps.run_scraper.outputs.jobs_count }} tin mới"
           file_pattern: "data/careerviet_*.csv"
+          
+      - name: 'Upload error screenshot'
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: error-screenshot-careerviet
+          path: error_screenshot_careerviet.png
+          retention-days: 1
