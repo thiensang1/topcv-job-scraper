@@ -4,11 +4,11 @@ const { stringify } = require('csv-stringify/sync');
 
 // --- CẤU HÌNH ---
 const TARGET_KEYWORD = "kế toán";
-const JOBS_PER_PAGE = 50; // CareerViet API có thể trả về nhiều tin mỗi trang
+const JOBS_PER_PAGE = 30; // Số lượng tin trên mỗi request
 const FAKE_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36';
 
 // --- API ENDPOINT ---
-const API_JOB_SEARCH = "https://api.careerviet.vn/v1/jobs";
+const API_JOB_SEARCH = "https://careerviet.vn/search-jobs";
 
 // --- HÀM HELPER ---
 function setOutput(name, value) {
@@ -17,9 +17,14 @@ function setOutput(name, value) {
   }
 }
 
-function formatDate(isoString) {
-    if (!isoString) return null;
-    return isoString.split('T')[0];
+function formatSalary(min, max, unit) {
+    if (min === 0 && max === 0) return "Thỏa thuận";
+    const format = (num) => new Intl.NumberFormat('vi-VN').format(num);
+    const currency = unit.toUpperCase();
+    if (min > 0 && max > 0) return `${format(min)} - ${format(max)} ${currency}`;
+    if (min > 0) return `Từ ${format(min)} ${currency}`;
+    if (max > 0) return `Lên đến ${format(max)} ${currency}`;
+    return "Thỏa thuận";
 }
 
 // --- HÀM CHÍNH ĐIỀU KHIỂN ---
@@ -27,64 +32,52 @@ function formatDate(isoString) {
     let allJobs = [];
     let jobsCount = 0;
     let finalFilename = "";
-    let currentPage = 1;
-    let totalPages = 1;
 
-    console.error(`\n--- Bắt đầu khai thác dữ liệu CareerViet cho từ khóa: "${TARGET_KEYWORD}" ---`);
+    try {
+        console.error(`--- Bắt đầu khai thác dữ liệu CareerViet cho từ khóa: "${TARGET_KEYWORD}" ---`);
 
-    while (currentPage <= totalPages) {
-        try {
-            console.error(`Đang khai thác trang ${currentPage}/${totalPages}...`);
-            
-            const response = await axios.get(API_JOB_SEARCH, {
-                params: {
-                    keyword: TARGET_KEYWORD,
-                    page: currentPage,
-                    limit: JOBS_PER_PAGE,
-                },
+        // Gửi yêu cầu POST với payload đầy đủ
+        const response = await axios.post(API_JOB_SEARCH,
+            // Request Body (Payload)
+            {
+                keyword: TARGET_KEYWORD,
+                page: 1, // Bắt đầu từ trang 1
+                size: JOBS_PER_PAGE
+            },
+            // Request Config
+            {
                 headers: {
                     'User-Agent': FAKE_USER_AGENT,
-                    'Accept': 'application/json, text/plain, */*'
+                    'Content-Type': 'application/json'
                 }
-            });
-
-            const data = response.data?.data;
-            const jobs = data?.jobs;
-
-            if (currentPage === 1 && data?.totalPages) {
-                totalPages = data.totalPages;
-                console.error(`Phát hiện có tổng cộng ${data.total} tin tuyển dụng (${totalPages} trang).`);
             }
+        );
 
-            if (!jobs || jobs.length === 0) {
-                console.error("Không có dữ liệu ở trang này, dừng lại.");
-                break;
-            }
-
-            const processedJobs = jobs.map(job => {
-                const locationText = job.locations.map(loc => loc.city_name).join(', ');
-
-                return {
-                    'Tên công việc': job.job_title,
-                    'Tên công ty': job.company_name,
-                    'Nơi làm việc': locationText,
-                    'Mức lương': job.salary || 'Thỏa thuận',
-                    'Ngày đăng tin': formatDate(job.posted_date),
-                    'Link': `https://careerviet.vn${job.job_link}`
-                };
-            });
-            
-            allJobs.push(...processedJobs);
-            currentPage++;
-
-        } catch (error) {
-            let errorMessage = error.message;
-            if (error.response) {
-                errorMessage = `Request failed with status code ${error.response.status}`;
-            }
-            console.error(`Lỗi khi khai thác trang ${currentPage}: ${errorMessage}`);
-            break;
+        const jobs = response.data?.data;
+        if (!jobs || jobs.length === 0) {
+            throw new Error("API không trả về dữ liệu việc làm.");
         }
+
+        console.error(` -> Phân tích thành công! Tìm thấy ${jobs.length} tin tuyển dụng.`);
+        
+        allJobs = jobs.map(job => {
+            return {
+                'Tên công việc': job.JOB_TITLE,
+                'Tên công ty': job.EMP_NAME,
+                'Nơi làm việc': job.LOCATION_NAME_ARR.join(', '),
+                'Mức lương': formatSalary(job.JOB_FROMSALARY_CVR, job.JOB_TOSALARY_CVR, job.JOB_SALARYUNIT_CVR),
+                'Ngày đăng tin': job.JOB_ACTIVEDATE,
+                'Ngày hết hạn': job.JOB_LASTDATE,
+                'Link': job.LINK_JOB
+            };
+        });
+
+    } catch (error) {
+        let errorMessage = error.message;
+        if (error.response) {
+            errorMessage = `Request failed with status code ${error.response.status}`;
+        }
+        console.error(`Lỗi nghiêm trọng trong chiến dịch: ${errorMessage}`);
     }
 
     if (allJobs.length > 0) {
