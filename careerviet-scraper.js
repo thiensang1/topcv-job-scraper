@@ -5,7 +5,7 @@ const { stringify } = require('csv-stringify/sync');
 
 // --- CẤU HÌNH ---
 const TARGET_KEYWORD = ""; // Cố định từ khóa
-const MAX_PAGES = 537;
+const MAX_PAGES = 10;
 const FAKE_USER_AGENTS = [
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
     'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
@@ -134,10 +134,10 @@ async function scrapeHTML(page, pageNum) {
                 const salaryEl = el.querySelector('.salary, .job-salary, .salary-text, [class*="salary"]');
                 const salary = salaryEl ? salaryEl.textContent.trim() : 'N/A';
                 
-                const activeDateEl = el.querySelector('.date-posted, .job-date, .posted-date, [class*="date"]');
+                const activeDateEl = el.querySelector('li em.mdi.mdi-calendar ~ time');
                 const activeDate = activeDateEl ? activeDateEl.textContent.trim() : 'N/A';
                 
-                const expiryDateEl = el.querySelector('.deadline, .expiry-date, .last-date, [class*="expire"]');
+                const expiryDateEl = el.querySelector('li em.fa.fa-clock-o ~ time');
                 const expiryDate = expiryDateEl ? expiryDateEl.textContent.trim() : 'N/A';
                 
                 const linkEl = el.querySelector('a[href*="/tim-viec-lam/"]') || el.querySelector('a');
