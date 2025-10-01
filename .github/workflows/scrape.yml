@@ -1,15 +1,12 @@
-# --- QUY TRÌNH TỰ ĐỘNG HÓA CUỐI CÙNG - PHIÊN BẢN "TẮC KÈ HOA" ---
-# Cập nhật: Tái cấu trúc thành quy trình "Điệp viên Đơn độc" và cung cấp "Bản đồ" cho nó.
-
-name: 'TopCV Daily Scraper'
+name: 'CareerViet Daily Scraper'
 
 on:
-  schedule:
-    - cron: '0 0,5,10,15 * * *'
   workflow_dispatch:
+  schedule:
+    - cron: '0 3,8,13,20 * * *'
 
 jobs:
-  scrape-and-commit:
+  scrape-careerviet:
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -17,32 +14,46 @@ jobs:
     steps:
       - name: 'Checkout repository'
         uses: actions/checkout@v4
-          
+              
       - name: 'Set up Node.js'
         uses: actions/setup-node@v4
         with:
-          node-version: '20' # Giữ phiên bản 20 để tương thích thư viện
+          node-version: '20'
           
-      - name: 'Install a stable version of Chrome'
+      - name: 'Create package.json if not exists'
+        run: |
+          if [ ! -f package.json ]; then
+            echo '{"name": "topcv-job-scraper", "version": "1.0.0", "dependencies": {}}' > package.json
+          fi
+          
+      - name: 'Install Chrome'
         id: setup_chrome
         uses: browser-actions/setup-chrome@latest
-        
+          
       - name: 'Install project dependencies'
-        run: npm ci
-
-      - name: 'Run Lone Wolf Scraper'
+        run: npm install puppeteer axios axios-retry csv-stringify
+        
+      - name: 'Run CareerViet Scraper'
         id: run_scraper
         env:
-          PROXY_API_ENDPOINT: ${{ secrets.PROXY_API_ENDPOINT }}
-          PROXY_API_KEY: ${{ secrets.PROXY_API_KEY }}
+          PROXY_URL: ${{ secrets.PROXY_URL_STATIC }}
           CHROME_PATH: ${{ steps.setup_chrome.outputs.chrome-path }}
-        run: node scraper.js
+        run: node careerviet-scraper.js
       
-      # --- GIAI ĐOẠN LƯU TRỮ ĐÃ ĐƯỢC TỐI ƯU ---
       - name: 'Commit results to repository'
         if: steps.run_scraper.outputs.jobs_count > 0
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
-          commit_message: "📊 Dữ liệu TopCV: Thêm ${{ steps.run_scraper.outputs.jobs_count }} tin mới"
-          # Tự động tìm tất cả file .csv trong thư mục data
-          file_pattern: "data/*.csv"
+          commit_message: "📊 Dữ liệu CareerViet: Thêm ${{ steps.run_scraper.outputs.jobs_count }} tin mới"
+          file_pattern: "data/careerviet_*.csv"
+          
+      - name: 'Upload debug artifacts'
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: debug-careerviet
+          path: |
+            debug_screenshot_page_*.png
+            debug_html_page_*.html
+            error_screenshot_careerviet.png
+          retention-days: 3
