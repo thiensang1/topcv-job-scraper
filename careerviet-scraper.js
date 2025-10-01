@@ -4,7 +4,7 @@ const axios = require('axios');
 const { stringify } = require('csv-stringify/sync');
 
 // --- CẤU HÌNH ---
-const TARGET_KEYWORD = "kế toán"; // Cố định từ khóa
+const TARGET_KEYWORD = ""; // Cố định từ khóa
 const MAX_PAGES = 537;
 const FAKE_USER_AGENTS = [
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
@@ -117,11 +117,11 @@ async function scrapeHTML(page, pageNum) {
         });
         
         // Trích xuất dữ liệu
-        const jobs = await page.evaluate((keyword) => {
+        const jobs = await page.evaluate((keyword, pageNum) => { // Thêm pageNum vào đây
             const jobElements = document.querySelectorAll('.job-item, .job__list--item, .list-jobs .item, [class*="job"], .search-result-item, .matching-scores');
             console.log(` -> Tìm thấy ${jobElements.length} phần tử job tiềm năng`);
 
-            return Array.from(jobElements).map(el => {
+            return Array.from(jobElements).map((el, index) => {
                 const titleEl = el.querySelector('h3 a, .job-title a, .title a, a[href*="/tim-viec-lam/"]');
                 const title = titleEl ? titleEl.textContent.trim() : 'N/A';
                 
@@ -147,7 +147,7 @@ async function scrapeHTML(page, pageNum) {
                 
                 return { title, company, location, salary, activeDate, expiryDate, link, jobId };
             }).filter(job => job.title.toLowerCase().includes(keyword.toLowerCase()) && job.title !== 'N/A');
-        }, TARGET_KEYWORD);
+        }, TARGET_KEYWORD, pageNum); // Truyền pageNum vào
 
         if (jobs.length === 0) {
             console.error(` -> Không còn dữ liệu ở trang ${pageNum}. Kết thúc phân trang.`);
