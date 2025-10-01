@@ -1,59 +1,60 @@
-name: 'CareerViet Daily Scraper'
+# --- QUY TRÌNH TỰ ĐỘNG HÓA CUỐI CÙNG - PHIÊN BẢN "TẮC KÈ HOA" ---
+# Cập nhật: Tái cấu trúc thành quy trình "Điệp viên Đơn độc" và cung cấp "Bản đồ" cho nó.
+
+name: 'TopCV Daily Scraper'
 
 on:
-  workflow_dispatch:
   schedule:
-    - cron: '0 3,8,13,20 * * *'
+    - cron: '0 0 * * *' # Nửa đêm giờ UTC (7h sáng giờ VN)
+  workflow_dispatch:
 
 jobs:
-  scrape-careerviet:
+  # --- MỘT JOB DUY NHẤT ĐỂ THỰC HIỆN TOÀN BỘ "CHIẾN DỊCH" ---
+  scrape-and-commit:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
-   
+    
     steps:
+      # --- GIAI ĐOẠN 1: CHUẨN BỊ "CĂN CỨ" ---
       - name: 'Checkout repository'
         uses: actions/checkout@v4
-              
+        # Lấy toàn bộ lịch sử để git pull/push hoạt động chính xác
+        with:
+          fetch-depth: 0 
+          
       - name: 'Set up Node.js'
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '18'
+          cache: 'npm'
           
-      - name: 'Create package.json if not exists'
-        run: |
-          if [ ! -f package.json ]; then
-            echo '{"name": "topcv-job-scraper", "version": "1.0.0", "dependencies": {}}' > package.json
-          fi
-          
-      - name: 'Install Chrome'
-        id: setup_chrome
+      # Thuê "Thợ sửa xe" và Gắn "Thiết bị Định vị"
+      - name: 'Setup Chrome browser'
+        id: setup_chrome # Đặt ID để lấy output
         uses: browser-actions/setup-chrome@latest
-          
-      - name: 'Install project dependencies'
-        run: npm install puppeteer axios axios-retry csv-stringify
         
-      - name: 'Run CareerViet Scraper'
-        id: run_scraper
+      - name: 'Install all project dependencies'
+        run: npm install
+
+      # --- GIAI ĐOẠN 2: TRIỂN KHAI "ĐIỆP VIÊN" ---
+      - name: 'Run Chameleon Scraper'
+        id: run_scraper # Đặt ID để lấy output
         env:
-          PROXY_URL: ${{ secrets.PROXY_URL_STATIC }}
+          PROXY_API_ENDPOINT: ${{ secrets.PROXY_API_ENDPOINT }}
+          PROXY_API_KEY: ${{ secrets.PROXY_API_KEY }}
+          # Cung cấp "Bản đồ Dẫn đường" cho "Điệp viên"
           CHROME_PATH: ${{ steps.setup_chrome.outputs.chrome-path }}
-        run: node careerviet-scraper.js
+        run: node scraper.js
       
+      # --- GIAI ĐOẠN 3: TỔNG HỢP VÀ LƯU TRỮ ---
       - name: 'Commit results to repository'
+        # Chỉ commit nếu "Điệp viên" báo cáo đã thu thập được dữ liệu
         if: steps.run_scraper.outputs.jobs_count > 0
-        uses: stefanzweifel/git-auto-commit-action@v5
-        with:
-          commit_message: "📊 Dữ liệu CareerViet: Thêm ${{ steps.run_scraper.outputs.jobs_count }} tin mới"
-          file_pattern: "data/careerviet_*.csv"
+        run: |
+          # Đồng bộ hóa với các file dữ liệu cũ (nếu có) để tránh lỗi push
+          git pull origin main --rebase
           
-      - name: 'Upload debug artifacts'
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: debug-careerviet
-          path: |
-            debug_screenshot_page_*.png
-            debug_html_page_*.html
-            error_screenshot_careerviet.png
-          retention-days: 3
+          git config --global user.name 'GitHub Actions Scraper'
+          git config --global user.email 'actions@github.com'
+          git add ${{ steps.run_scraper.outputs.final_filename }}
+          git commit -m "📊 Dữ liệu TopCV: Thêm ${{ steps.run_scraper.outputs.jobs_count }} tin mới vào ${{ steps.run_scraper.outputs.final_filename }}"
+          git push
