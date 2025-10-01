@@ -31,12 +31,12 @@ jobs:
         uses: browser-actions/setup-chrome@latest
           
       - name: 'Install project dependencies'
-        run: npm install puppeteer axios axios-retry csv-stringify
+        run: npm install puppeteer csv-stringify
         
       - name: 'Run CareerViet Scraper'
         id: run_scraper
         env:
-          PROXY_URL: ${{ secrets.PROXY_URL_STATIC }} # Proxy tĩnh nếu có
+          PROXY_URL: ${{ secrets.PROXY_URL_STATIC }}
           CHROME_PATH: ${{ steps.setup_chrome.outputs.chrome-path }}
         run: node careerviet-scraper.js
       
@@ -47,10 +47,13 @@ jobs:
           commit_message: "📊 Dữ liệu CareerViet: Thêm ${{ steps.run_scraper.outputs.jobs_count }} tin mới"
           file_pattern: "data/careerviet_*.csv"
           
-      - name: 'Upload error screenshot'
+      - name: 'Upload debug artifacts'
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: error-screenshot-careerviet
-          path: error_screenshot_careerviet.png
-          retention-days: 1
+          name: debug-careerviet
+          path: |
+            debug_screenshot_page_*.png
+            debug_html_page_*.html
+            error_screenshot_careerviet.png
+          retention-days: 3
