@@ -5,7 +5,7 @@ const { stringify } = require('csv-stringify/sync');
 
 // --- CẤU HÌNH ---
 const TARGET_KEYWORD = ""; // Cố định từ khóa
-const MAX_PAGES = 5;
+const MAX_PAGES = 550;
 const FAKE_USER_AGENTS = [
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
     'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
