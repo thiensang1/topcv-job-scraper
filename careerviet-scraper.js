@@ -4,7 +4,7 @@ const axios = require('axios'); // Thêm axios cho getProxy
 const { stringify } = require('csv-stringify/sync');
 
 // --- CẤU HÌNH ---
-const TARGET_KEYWORD = "kế toán";
+const TARGET_KEYWORD = "";
 const MAX_PAGES = 537; // Dựa trên trang cuối cùng
 const RETRY_COUNT = 2;
 const FAKE_USER_AGENTS = [
