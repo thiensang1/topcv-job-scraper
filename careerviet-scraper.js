@@ -4,7 +4,8 @@ const { stringify } = require('csv-stringify/sync');
 
 // --- CẤU HÌNH ---
 const TARGET_KEYWORD = "kế toán";
-const MAX_PAGES = 537; // Giới hạn dựa trên trang cuối cùng
+const MAX_PAGES = 10; // Test với 10 trang; tăng lên 537 sau khi ổn
+const RETRY_COUNT = 2; // Giảm retry để tránh delay dài
 const FAKE_USER_AGENTS = [
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
     'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
@@ -27,6 +28,7 @@ async function getBrowserContext() {
             '--disable-setuid-sandbox',
             '--disable-gpu',
             '--disable-dev-shm-usage',
+            '--disable-web-security',
             '--window-size=1920,1080'
         ],
         executablePath: process.env.CHROME_PATH || '/usr/bin/google-chrome'
@@ -54,36 +56,38 @@ async function getBrowserContext() {
     return { browser, page };
 }
 
-async function scrapeHTML(page, pageNum) {
+async function scrapeHTML(page, pageNum, retry = 0) {
     const startTime = Date.now();
     const url = `${SEARCH_BASE_URL}-${pageNum}-vi.html`;
-    console.error(` -> Bắt đầu trang ${pageNum}: ${url}`);
+    console.error(`\n--- Bắt đầu trang ${pageNum} (retry ${retry}/${RETRY_COUNT}) --- URL: ${url}`);
     
     try {
-        await page.goto(url, { waitUntil: 'networkidle2', timeout: 60000 }); // Giữ 60s như cũ
+        await page.goto(url, { waitUntil: 'networkidle2', timeout: 120000 }); // Tăng timeout 120s
+        
+        // Kiểm tra 404
+        const pageTitle = await page.title();
+        if (pageTitle.includes('không tìm thấy') || pageTitle.includes('error')) {
+            console.error(` -> Trang ${pageNum} không tồn tại. Kết thúc.`);
+            return { jobs: [], hasNextPage: false };
+        }
         
         // Chờ job list
         try {
-            await page.waitForSelector('.job-item, .job__list--item, .list-jobs .item, [class*="job"], .search-result-item, .matching-scores', { timeout: 10000 });
+            await page.waitForSelector('.job-item, .job__list--item, .list-jobs .item, [class*="job"], .search-result-item, .matching-scores', { timeout: 15000 });
+            console.error(` -> Job list loaded ở trang ${pageNum}`);
         } catch (e) {
-            console.error(` -> Không tìm thấy job list ở trang ${pageNum}, chờ thêm...`);
-            await new Promise(resolve => setTimeout(resolve, 3000)); // Giảm chờ
+            console.error(` -> Không tìm thấy job list ở trang ${pageNum}, chờ thêm 5s...`);
+            await new Promise(resolve => setTimeout(resolve, 5000));
         }
         
-        // Cuộn trang 2 lần (giảm để tăng tốc)
-        for (let i = 0; i < 2; i++) {
+        // Cuộn trang 3 lần
+        for (let i = 0; i < 3; i++) {
             await page.evaluate(() => window.scrollBy(0, window.innerHeight));
             await new Promise(resolve => setTimeout(resolve, 1000));
         }
         
-        // Clear cache mỗi 10 trang để tối ưu bộ nhớ (thay restart browser)
-        if (pageNum % 10 === 0) {
-            await page.evaluate(() => window.localStorage.clear());
-            console.error(` -> Đã clear cache tại trang ${pageNum}`);
-        }
-        
-        // Debug (chỉ cho trang quan trọng)
-        if (pageNum === 1 || pageNum === 2 || pageNum === 62 || pageNum % 50 === 0) {
+        // Debug cho trang 1, 2 và lỗi
+        if (pageNum <= 2 || retry > 0) {
             await page.screenshot({ path: `debug_screenshot_page_${pageNum}.png`, fullPage: true });
             const htmlContent = await page.content();
             fs.writeFileSync(`debug_html_page_${pageNum}.html`, htmlContent);
@@ -120,21 +124,25 @@ async function scrapeHTML(page, pageNum) {
                 
                 return { title, company, location, salary, activeDate, expiryDate, link, jobId };
             }).filter(job => job.title.toLowerCase().includes(keyword.toLowerCase()) && job.title !== 'N/A');
-        }, TARGET_KEYWORD);
+        }, TARGET_KEYWORD); // Sửa: Truyền TARGET_KEYWORD đúng cách
 
-        const endTime = Date.now();
-        console.error(` -> Kết thúc trang ${pageNum}: ${jobs.length} job (${(endTime - startTime)/1000}s)`);
+        const timeTaken = Date.now() - startTime;
+        console.error(` -> Kết thúc trang ${pageNum} sau ${timeTaken}ms. Job: ${jobs.length}`);
         
-        // Kiểm tra nút "Next" (không dùng để break, chỉ log)
+        // Kiểm tra nút "Next"
         const hasNextPage = await page.evaluate(() => {
             const nextButton = document.querySelector('a.next, a.pagination-next, [rel="next"], .next-page');
             return !!nextButton && !nextButton.classList.contains('disabled');
         });
-        console.error(` -> Trang ${pageNum} có trang tiếp: ${hasNextPage}`);
         
         return { jobs, hasNextPage };
     } catch (error) {
         console.error(` -> Lỗi trang ${pageNum}: ${error.message}`);
+        if (retry < RETRY_COUNT) {
+            console.error(` -> Retry trang ${pageNum} lần ${retry + 1} sau 2s...`);
+            await new Promise(resolve => setTimeout(resolve, 2000)); // Giảm delay retry
+            return await scrapeHTML(page, pageNum, retry + 1);
+        }
         return { jobs: [], hasNextPage: false };
     }
 }
@@ -153,11 +161,9 @@ async function scrapeHTML(page, pageNum) {
         console.error(`--- Bắt đầu khai thác dữ liệu CareerViet cho từ khóa: "${TARGET_KEYWORD}" (tối đa ${MAX_PAGES} trang) ---`);
 
         while (pageNum <= MAX_PAGES) {
-            const { jobs } = await scrapeHTML(page, pageNum);
-            
-            // Dừng nếu không có job (không kiểm tra hasNextPage nghiêm ngặt)
-            if (jobs.length === 0) {
-                console.error(` -> Không có job ở trang ${pageNum}. Kết thúc.`);
+            const { jobs, hasNextPage } = await scrapeHTML(page, pageNum);
+            if (jobs.length === 0 && !hasNextPage) {
+                console.error(` -> Không còn dữ liệu ở trang ${pageNum}. Kết thúc.`);
                 break;
             }
 
