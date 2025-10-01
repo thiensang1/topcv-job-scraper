@@ -20,12 +20,15 @@ jobs:
         with:
           node-version: '20'
           
+      - name: 'Create package.json if not exists'
+        run: |
+          if [ ! -f package.json ]; then
+            echo '{"name": "topcv-job-scraper", "version": "1.0.0", "dependencies": {}}' > package.json
+          fi
+          
       - name: 'Install project dependencies'
-        run: npm install
-      
-      - name: 'Install additional dependencies'
-        run: npm install puppeteer axios-retry
-      
+        run: npm install puppeteer axios axios-retry csv-stringify
+        
       - name: 'Run CareerViet Scraper'
         id: run_scraper
         env:
