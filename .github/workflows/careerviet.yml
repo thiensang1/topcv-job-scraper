@@ -31,12 +31,14 @@ jobs:
         uses: browser-actions/setup-chrome@latest
           
       - name: 'Install project dependencies'
-        run: npm install puppeteer csv-stringify
+        run: npm install puppeteer csv-stringify axios  # Thêm axios cho getProxy
         
       - name: 'Run CareerViet Scraper'
         id: run_scraper
         env:
-          PROXY_URL: ${{ secrets.PROXY_URL_STATIC }}
+          PROXY_API_KEY: ${{ secrets.PROXY_API_KEY }}  # API key cho proxy xoay (ví dụ Bright Data)
+          PROXY_API_ENDPOINT: ${{ secrets.PROXY_API_ENDPOINT }}  # Endpoint API proxy (ví dụ: https://api.brightdata.com/...)
+          PROXY_URL: ${{ secrets.PROXY_URL_STATIC }}  # Proxy tĩnh nếu có
           CHROME_PATH: ${{ steps.setup_chrome.outputs.chrome-path }}
         run: node careerviet-scraper.js
       
