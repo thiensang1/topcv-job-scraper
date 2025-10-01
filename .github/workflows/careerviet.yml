@@ -23,8 +23,8 @@ jobs:
       - name: 'Install project dependencies'
         run: npm install
       
-      - name: 'Install axios-retry'
-        run: npm install axios-retry
+      - name: 'Install additional dependencies'
+        run: npm install puppeteer axios-retry
       
       - name: 'Run CareerViet Scraper'
         id: run_scraper
