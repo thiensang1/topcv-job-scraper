@@ -31,7 +31,7 @@ jobs:
         uses: browser-actions/setup-chrome@latest
           
       - name: 'Install project dependencies'
-        run: npm install puppeteer csv-stringify axios # Thêm axios cho getProxy
+        run: npm install puppeteer csv-stringify axios
         
       - name: 'Run CareerViet Scraper'
         id: run_scraper
