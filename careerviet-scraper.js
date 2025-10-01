@@ -3,7 +3,7 @@ const puppeteer = require('puppeteer');
 const { stringify } = require('csv-stringify/sync');
 
 // --- CẤU HÌNH ---
-const TARGET_KEYWORD = "";
+const TARGET_KEYWORD = "kế toán"; // Cố định từ khóa
 const MAX_PAGES = 100;
 const FAKE_USER_AGENTS = [
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
@@ -62,18 +62,18 @@ async function scrapeHTML(page, pageNum) {
     try {
         await page.goto(url, { waitUntil: 'networkidle2', timeout: 60000 });
         
-        // Chờ explicit cho job list
+        // Chờ job list render
         try {
-            await page.waitForSelector('.job-item, .job__list--item, .list-jobs .item, [class*="job"], .search-result-item', { timeout: 10000 });
+            await page.waitForSelector('.job-item, .job__list--item, .list-jobs .item, [class*="job"], .search-result-item, .matching-scores', { timeout: 15000 });
         } catch (e) {
-            console.error(` -> Không tìm thấy job list, thử chờ thêm...`);
-            await page.waitForTimeout(5000);
+            console.error(` -> Không tìm thấy job list, chờ thêm 5s...`);
+            await new Promise(resolve => setTimeout(resolve, 5000)); // Thay waitForTimeout
         }
         
-        // Cuộn trang 3 lần
-        for (let i = 0; i < 3; i++) {
+        // Cuộn trang 5 lần để tải lazy content
+        for (let i = 0; i < 5; i++) {
             await page.evaluate(() => window.scrollBy(0, window.innerHeight));
-            await page.waitForTimeout(1000);
+            await new Promise(resolve => setTimeout(resolve, 1000));
         }
         
         // Debug: Lưu HTML và screenshot
@@ -83,7 +83,7 @@ async function scrapeHTML(page, pageNum) {
         console.error(` -> Đã lưu debug HTML cho trang ${pageNum} (kích thước: ${htmlContent.length} ký tự)`);
 
         const jobs = await page.evaluate((keyword) => {
-            const jobElements = document.querySelectorAll('.job-item, .job__list--item, .list-jobs .item, [class*="job"], .search-result-item');
+            const jobElements = document.querySelectorAll('.job-item, .job__list--item, .list-jobs .item, [class*="job"], .search-result-item, .matching-scores');
             console.log(` -> Tìm thấy ${jobElements.length} phần tử job tiềm năng`); // Log trong evaluate
             
             return Array.from(jobElements).map((el, index) => {
@@ -112,11 +112,11 @@ async function scrapeHTML(page, pageNum) {
                 
                 return { title, company, location, salary, activeDate, expiryDate, link, jobId };
             }).filter(job => job.title.toLowerCase().includes(keyword.toLowerCase()) && job.title !== 'N/A');
-        }, TARGET_KEYWORD);
+        }, keyword = TARGET_KEYWORD);
 
         console.error(` -> Trích xuất được ${jobs.length} job từ trang ${pageNum}`);
         
-        // Kiểm tra nút "Next" để xác định pagination
+        // Kiểm tra nút "Next"
         const hasNextPage = await page.evaluate(() => {
             const nextButton = document.querySelector('a.next, a.pagination-next, [rel="next"], .next-page');
             return !!nextButton && !nextButton.classList.contains('disabled');
