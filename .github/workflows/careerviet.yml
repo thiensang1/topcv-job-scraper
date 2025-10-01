@@ -26,6 +26,10 @@ jobs:
             echo '{"name": "topcv-job-scraper", "version": "1.0.0", "dependencies": {}}' > package.json
           fi
           
+      - name: 'Install Chrome'
+        id: setup_chrome
+        uses: browser-actions/setup-chrome@latest
+          
       - name: 'Install project dependencies'
         run: npm install puppeteer axios axios-retry csv-stringify
         
@@ -33,6 +37,7 @@ jobs:
         id: run_scraper
         env:
           PROXY_URL: ${{ secrets.PROXY_URL_STATIC }} # Proxy tĩnh nếu có
+          CHROME_PATH: ${{ steps.setup_chrome.outputs.chrome-path }}
         run: node careerviet-scraper.js
       
       - name: 'Commit results to repository'
