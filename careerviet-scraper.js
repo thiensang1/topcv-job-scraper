@@ -1,7 +1,7 @@
 const fs = require('fs');
 const puppeteer = require('puppeteer');
 const axios = require('axios');
-const axiosRetry = require('axios-retry').default; // Sửa import để dùng default export
+const axiosRetry = require('axios-retry').default;
 const { stringify } = require('csv-stringify/sync');
 
 // --- CẤU HÌNH ---
@@ -33,7 +33,8 @@ function setOutput(name, value) {
 async function getBrowserContext() {
     const browser = await puppeteer.launch({
         headless: true,
-        args: ['--no-sandbox', '--disable-setuid-sandbox']
+        args: ['--no-sandbox', '--disable-setuid-sandbox'],
+        executablePath: process.env.CHROME_PATH || '/usr/bin/google-chrome' // Sử dụng Chrome từ action
     });
     const page = await browser.newPage();
     
@@ -66,7 +67,13 @@ async function getBrowserContext() {
     let pageNum = 1;
     const jobIds = new Set();
 
-    const { browser, page, cookieHeader, csrfToken } = await getBrowserContext();
+    let browser, page, cookieHeader, csrfToken;
+    try {
+        ({ browser, page, cookieHeader, csrfToken } = await getBrowserContext());
+    } catch (e) {
+        console.error(`Lỗi khi khởi tạo trình duyệt: ${e.message}`);
+        return;
+    }
 
     try {
         console.error(`--- Bắt đầu khai thác dữ liệu CareerViet cho từ khóa: "${TARGET_KEYWORD}" ---`);
@@ -141,7 +148,7 @@ async function getBrowserContext() {
         // Chụp ảnh màn hình lỗi
         await page.screenshot({ path: 'error_screenshot_careerviet.png' });
     } finally {
-        await browser.close();
+        if (browser) await browser.close();
     }
 
     if (allJobs.length > 0) {
