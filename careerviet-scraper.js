@@ -1,7 +1,7 @@
 const fs = require('fs');
 const puppeteer = require('puppeteer');
 const axios = require('axios');
-const axiosRetry = require('axios-retry');
+const axiosRetry = require('axios-retry').default; // Sửa import để dùng default export
 const { stringify } = require('csv-stringify/sync');
 
 // --- CẤU HÌNH ---
