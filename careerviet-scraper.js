@@ -1,16 +1,41 @@
 const fs = require('fs');
 const puppeteer = require('puppeteer');
+const axios = require('axios');
 const { stringify } = require('csv-stringify/sync');
 
 // --- CẤU HÌNH ---
-const TARGET_KEYWORD = ""; // Cố định từ khóa
-const MAX_PAGES = 100;
+const TARGET_KEYWORD = "kế toán"; // Sửa để tránh rỗng
+const MAX_PAGES = 537; // Dựa trên trang cuối cùng
 const FAKE_USER_AGENTS = [
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
     'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:129.0) Gecko/20100101 Firefox/129.0'
 ];
 const SEARCH_BASE_URL = "https://careerviet.vn/viec-lam/tat-ca-viec-lam-trang";
+
+// --- HÀM LẤY PROXY ---
+async function getProxy(apiKey, apiEndpoint) {
+    if (!apiKey || !apiEndpoint) {
+        console.error("Cảnh báo: Không có thông tin API Proxy. Chạy không cần proxy.");
+        return null;
+    }
+    try {
+        console.error("-> [Điệp viên] Đang yêu cầu một danh tính proxy MỚI từ API...");
+        const response = await axios.get(apiEndpoint, {
+            params: { key: apiKey, region: 'random' },
+            timeout: 20000
+        });
+        if (response.data?.success && response.data?.data?.http) {
+            const [host, port] = response.data.data.http.split(':');
+            console.error(`-> [Điệp viên] Đã nhận proxy mới thành công: ${host}:${port}`);
+            return { host, port };
+        }
+        throw new Error(`Phản hồi không như mong đợi: ${JSON.stringify(response.data)}`);
+    } catch (error) {
+        console.error(`-> [Điệp viên] Lỗi nghiêm trọng khi lấy proxy: ${error.message}`);
+        return null;
+    }
+}
 
 // --- HÀM HELPER ---
 function setOutput(name, value) {
@@ -19,17 +44,23 @@ function setOutput(name, value) {
     }
 }
 
-async function getBrowserContext() {
+async function getBrowserContext(proxy) {
+    const args = [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-gpu',
+        '--disable-dev-shm-usage',
+        '--disable-web-security',
+        '--window-size=1920,1080'
+    ];
+    if (proxy) {
+        args.push(`--proxy-server=http://${proxy.host}:${proxy.port}`);
+        console.error(`-> Sử dụng proxy mới: http://${proxy.host}:${proxy.port}`);
+    }
+
     const browser = await puppeteer.launch({
         headless: true,
-        args: [
-            '--no-sandbox',
-            '--disable-setuid-sandbox',
-            '--disable-gpu',
-            '--disable-dev-shm-usage',
-            '--disable-web-security',
-            '--window-size=1920,1080'
-        ],
+        args,
         executablePath: process.env.CHROME_PATH || '/usr/bin/google-chrome'
     });
     const page = await browser.newPage();
@@ -62,70 +93,57 @@ async function scrapeHTML(page, pageNum) {
     try {
         await page.goto(url, { waitUntil: 'networkidle2', timeout: 60000 });
         
-        // Chờ job list render
+        // Chờ explicit cho job list
         try {
             await page.waitForSelector('.job-item, .job__list--item, .list-jobs .item, [class*="job"], .search-result-item, .matching-scores', { timeout: 15000 });
         } catch (e) {
-            console.error(` -> Không tìm thấy job list, chờ thêm 5s...`);
-            await new Promise(resolve => setTimeout(resolve, 5000)); // Thay waitForTimeout
+            console.error(' -> Không tìm thấy selector job trên trang');
         }
         
-        // Cuộn trang 5 lần để tải lazy content
-        for (let i = 0; i < 5; i++) {
-            await page.evaluate(() => window.scrollBy(0, window.innerHeight));
-            await new Promise(resolve => setTimeout(resolve, 1000));
-        }
-        
-        // Debug: Lưu HTML và screenshot
-        await page.screenshot({ path: `debug_screenshot_page_${pageNum}.png`, fullPage: true });
-        const htmlContent = await page.content();
-        fs.writeFileSync(`debug_html_page_${pageNum}.html`, htmlContent);
-        console.error(` -> Đã lưu debug HTML cho trang ${pageNum} (kích thước: ${htmlContent.length} ký tự)`);
-
-        const jobs = await page.evaluate((keyword) => {
-            const jobElements = document.querySelectorAll('.job-item, .job__list--item, .list-jobs .item, [class*="job"], .search-result-item, .matching-scores');
-            console.log(` -> Tìm thấy ${jobElements.length} phần tử job tiềm năng`); // Log trong evaluate
-            
-            return Array.from(jobElements).map((el, index) => {
-                const titleEl = el.querySelector('h3 a, .job-title a, .title a, a[href*="/tim-viec-lam/"]');
-                const title = titleEl ? titleEl.textContent.trim() : 'N/A';
-                
-                const companyEl = el.querySelector('.company-name, .job-company, .company a, [class*="company"]');
-                const company = companyEl ? companyEl.textContent.trim() : 'N/A';
-                
-                const locationEl = el.querySelector('.location, .job-location, .address, [class*="location"]');
-                const location = locationEl ? locationEl.textContent.trim() : 'N/A';
-                
-                const salaryEl = el.querySelector('.salary, .job-salary, .salary-text, [class*="salary"]');
-                const salary = salaryEl ? salaryEl.textContent.trim() : 'N/A';
-                
-                const activeDateEl = el.querySelector('.date-posted, .job-date, .posted-date, [class*="date"]');
-                const activeDate = activeDateEl ? activeDateEl.textContent.trim() : 'N/A';
-                
-                const expiryDateEl = el.querySelector('.deadline, .expiry-date, .last-date, [class*="expire"]');
-                const expiryDate = expiryDateEl ? expiryDateEl.textContent.trim() : 'N/A';
-                
-                const linkEl = el.querySelector('a[href*="/tim-viec-lam/"]') || el.querySelector('a');
-                const link = linkEl ? (linkEl.href.startsWith('http') ? linkEl.href : 'https://careerviet.vn' + linkEl.getAttribute('href')) : 'N/A';
-                
-                const jobId = link.match(/\.([0-9A-F]{8})\.html$/)?.[1] || `job_${index}`;
-                
-                return { title, company, location, salary, activeDate, expiryDate, link, jobId };
-            }).filter(job => job.title.toLowerCase().includes(keyword.toLowerCase()) && job.title !== 'N/A');
-        }, keyword = TARGET_KEYWORD);
-
-        console.error(` -> Trích xuất được ${jobs.length} job từ trang ${pageNum}`);
-        
-        // Kiểm tra nút "Next"
-        const hasNextPage = await page.evaluate(() => {
-            const nextButton = document.querySelector('a.next, a.pagination-next, [rel="next"], .next-page');
-            return !!nextButton && !nextButton.classList.contains('disabled');
+        // Cuộn trang để tải lazy content
+        await page.evaluate(async () => {
+            await new Promise(resolve => {
+                let totalHeight = 0;
+                const distance = 100;
+                const timer = setInterval(() => {
+                    window.scrollBy(0, distance);
+                    totalHeight += distance;
+                    if (totalHeight >= document.body.scrollHeight) {
+                        clearInterval(timer);
+                        resolve();
+                    }
+                }, 100);
+            });
         });
         
-        return { jobs, hasNextPage };
+        // Trích xuất dữ liệu
+        const jobs = await page.evaluate((keyword) => {
+            const jobElements = document.querySelectorAll('.job-item, .job__list--item, .list-jobs .item, [class*="job"], .search-result-item, .matching-scores');
+            console.log(` -> Tìm thấy ${jobElements.length} phần tử job tiềm năng`);
+
+            return Array.from(jobElements).map(el => {
+                return {
+                    'Tên công việc': el.JOB_TITLE,
+                    'Tên công ty': el.EMP_NAME,
+                    'Nơi làm việc': el.LOCATION_NAME_ARR.join(', '),
+                    'Mức lương': el.JOB_SALARY_STRING,
+                    'Ngày đăng tin': el.JOB_ACTIVEDATE,
+                    'Ngày hết hạn': el.JOB_LASTDATE,
+                    'Link': el.LINK_JOB
+                };
+            });
+        }, TARGET_KEYWORD);
+
+        if (!jobs || !Array.isArray(jobs) || jobs.length === 0) {
+            throw new Error("Không tìm thấy dữ liệu việc làm hoặc dữ liệu rỗng.");
+        }
+
+        console.error(` -> Phân tích thành công! Tìm thấy ${jobs.length} tin tuyển dụng.`);
+        
+        return jobs;
     } catch (error) {
-        console.error(` -> Lỗi khi cào HTML trang ${pageNum}: ${error.message}`);
-        return { jobs: [], hasNextPage: false };
+        console.error(`Lỗi nghiêm trọng trong chiến dịch: ${error.message}`);
+        return [];
     }
 }
 
@@ -136,47 +154,49 @@ async function scrapeHTML(page, pageNum) {
     let finalFilename = "";
     let pageNum = 1;
     const jobIds = new Set();
-
     let browser, page;
+    let proxy = null;
+    const apiKey = process.env.PROXY_API_KEY;
+    const apiEndpoint = process.env.PROXY_API_ENDPOINT;
+
     try {
-        ({ browser, page } = await getBrowserContext());
         console.error(`--- Bắt đầu khai thác dữ liệu CareerViet cho từ khóa: "${TARGET_KEYWORD}" ---`);
 
+        // Lấy proxy ban đầu nếu có
+        proxy = await getProxy(apiKey, apiEndpoint);
+        ({ browser, page } = await getBrowserContext(proxy));
+
         while (pageNum <= MAX_PAGES) {
-            const { jobs, hasNextPage } = await scrapeHTML(page, pageNum);
+            const jobs = await scrapeHTML(page, pageNum);
             if (jobs.length === 0) {
-                console.error(` -> Không còn dữ liệu ở trang ${pageNum}. Kết thúc.`);
+                console.error(` -> Không còn dữ liệu ở trang ${pageNum}. Kết thúc phân trang.`);
                 break;
             }
 
-            const newJobs = jobs
-                .filter(job => !jobIds.has(job.jobId))
-                .map(job => {
-                    jobIds.add(job.jobId);
-                    return {
-                        'Tên công việc': job.title,
-                        'Tên công ty': job.company,
-                        'Nơi làm việc': job.location,
-                        'Mức lương': job.salary,
-                        'Ngày đăng tin': job.activeDate,
-                        'Ngày hết hạn': job.expiryDate,
-                        'Link': job.link
-                    };
-                });
+            const newJobs = jobs.map(job => ({
+                'Tên công việc': job['Tên công việc'] || 'N/A',
+                'Tên công ty': job['Tên công ty'] || 'N/A',
+                'Nơi làm việc': job['Nơi làm việc'] || 'N/A',
+                'Mức lương': job['Mức lương'] || 'N/A',
+                'Ngày đăng tin': job['Ngày đăng tin'] || 'N/A',
+                'Ngày hết hạn': job['Ngày hết hạn'] || 'N/A',
+                'Link': job['Link'] || 'N/A'
+            }));
 
             allJobs = [...allJobs, ...newJobs];
-            console.error(` -> Thêm ${newJobs.length} job mới từ trang ${pageNum}. Tổng: ${allJobs.length}`);
             pageNum++;
-            
-            if (!hasNextPage) {
-                console.error(` -> Không có trang tiếp theo. Kết thúc phân trang.`);
-                break;
+
+            // Lấy proxy mới mỗi 20 trang
+            if (pageNum % 20 === 0) {
+                console.error(` -> Lấy proxy mới cho trang ${pageNum}...`);
+                proxy = await getProxy(apiKey, apiEndpoint);
+                await browser.close();
+                ({ browser, page } = await getBrowserContext(proxy));
             }
         }
 
     } catch (error) {
-        console.error(`Lỗi nghiêm trọng: ${error.message}`);
-        if (page) await page.screenshot({ path: 'error_screenshot_careerviet.png', fullPage: true });
+        console.error(`Lỗi nghiêm trọng trong chiến dịch: ${error.message}`);
     } finally {
         if (browser) await browser.close();
     }
@@ -187,16 +207,17 @@ async function scrapeHTML(page, pageNum) {
             hour: '2-digit', minute: '2-digit', hour12: false,
             timeZone: 'Asia/Ho_Chi_Minh'
         }).replace(/, /g, '_').replace(/\//g, '-').replace(/:/g, '-');
-
+        
         finalFilename = `data/careerviet_${TARGET_KEYWORD.replace(/\s/g, '-')}_${timestamp}.csv`;
         jobsCount = allJobs.length;
-
+        
         fs.mkdirSync('data', { recursive: true });
         fs.writeFileSync(finalFilename, '\ufeff' + stringify(allJobs, { header: true }));
-
-        console.error(`\n--- BÁO CÁO --- Đã tổng hợp ${jobsCount} tin vào ${finalFilename}`);
+        
+        console.error(`\n--- BÁO CÁO NHIỆM VỤ ---`);
+        console.error(`Đã tổng hợp ${jobsCount} tin việc làm từ CareerViet vào file ${finalFilename}`);
     } else {
-        console.error('\nKhông có dữ liệu mới.');
+        console.error('\nKhông có dữ liệu mới để tổng hợp.');
     }
 
     setOutput('jobs_count', jobsCount);
