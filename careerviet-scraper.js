@@ -143,7 +143,7 @@ async function scrapeHTML(page, pageNum) {
                 const linkEl = el.querySelector('a[href*="/tim-viec-lam/"]') || el.querySelector('a');
                 const link = linkEl ? (linkEl.href.startsWith('http') ? linkEl.href : 'https://careerviet.vn' + linkEl.getAttribute('href')) : 'N/A';
                 
-                const jobId = link.match(/\.([0-9A-F]{8})\.html$/)?.[1] || `job_${pageNum}_${index}`;
+                 const jobId = linkEl ? linkEl.getAttribute('data-id') || `job_${pageNum}_${index}` : `job_${pageNum}_${index}`;
                 
                 return { title, company, location, salary, activeDate, expiryDate, link, jobId };
             }).filter(job => job.title.toLowerCase().includes(keyword.toLowerCase()) && job.title !== 'N/A');
@@ -190,6 +190,7 @@ async function scrapeHTML(page, pageNum) {
             }
 
             const newJobs = jobs.map(job => ({
+                'ID': job.jobId || 'N/A',
                 'Tên công việc': job.title || 'N/A',
                 'Tên công ty': job.company || 'N/A',
                 'Nơi làm việc': job.location || 'N/A',
