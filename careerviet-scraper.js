@@ -1,12 +1,10 @@
 const fs = require('fs');
 const puppeteer = require('puppeteer');
-const axios = require('axios'); // Thêm axios cho getProxy
 const { stringify } = require('csv-stringify/sync');
 
 // --- CẤU HÌNH ---
-const TARGET_KEYWORD = "";
-const MAX_PAGES = 537; // Dựa trên trang cuối cùng
-const RETRY_COUNT = 2;
+const TARGET_KEYWORD = ""; // Cố định từ khóa
+const MAX_PAGES = 100;
 const FAKE_USER_AGENTS = [
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
     'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
@@ -21,46 +19,17 @@ function setOutput(name, value) {
     }
 }
 
-async function getProxy(apiKey, apiEndpoint) {
-    if (!apiKey || !apiEndpoint) {
-        console.error("Cảnh báo: Không có thông tin API Proxy. Chạy không cần proxy.");
-        return null;
-    }
-    try {
-        console.error("-> [Proxy] Đang yêu cầu proxy mới từ API...");
-        const response = await axios.get(apiEndpoint, {
-            params: { key: apiKey, region: 'random' },
-            timeout: 20000
-        });
-        if (response.data?.success && response.data?.data?.http) {
-            const [host, port] = response.data.data.http.split(':');
-            console.error(`-> [Proxy] Đã nhận proxy mới: ${host}:${port}`);
-            return { host, port };
-        }
-        throw new Error(`Phản hồi API proxy không hợp lệ: ${JSON.stringify(response.data)}`);
-    } catch (error) {
-        console.error(`-> [Proxy] Lỗi khi lấy proxy mới: ${error.message}`);
-        return null;
-    }
-}
-
-async function getBrowserContext(proxy) {
-    const launchArgs = [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-gpu',
-        '--disable-dev-shm-usage',
-        '--disable-web-security',
-        '--window-size=1920,1080'
-    ];
-    if (proxy) {
-        launchArgs.push(`--proxy-server=http://${proxy.host}:${proxy.port}`);
-        console.error(`-> [Proxy] Sử dụng proxy: http://${proxy.host}:${proxy.port}`);
-    }
-
+async function getBrowserContext() {
     const browser = await puppeteer.launch({
         headless: true,
-        args: launchArgs,
+        args: [
+            '--no-sandbox',
+            '--disable-setuid-sandbox',
+            '--disable-gpu',
+            '--disable-dev-shm-usage',
+            '--disable-web-security',
+            '--window-size=1920,1080'
+        ],
         executablePath: process.env.CHROME_PATH || '/usr/bin/google-chrome'
     });
     const page = await browser.newPage();
@@ -86,47 +55,36 @@ async function getBrowserContext(proxy) {
     return { browser, page };
 }
 
-async function scrapeHTML(page, pageNum, retry = 0) {
-    const startTime = Date.now();
+async function scrapeHTML(page, pageNum) {
     const url = `${SEARCH_BASE_URL}-${pageNum}-vi.html`;
-    console.error(`\n--- Bắt đầu trang ${pageNum} (retry ${retry}/${RETRY_COUNT}) --- URL: ${url}`);
+    console.error(` -> Đang cào dữ liệu từ trang ${url}...`);
     
     try {
-        await page.goto(url, { waitUntil: 'networkidle2', timeout: 120000 });
+        await page.goto(url, { waitUntil: 'networkidle2', timeout: 60000 });
         
-        // Kiểm tra 404
-        const pageTitle = await page.title();
-        if (pageTitle.includes('không tìm thấy') || pageTitle.includes('error')) {
-            console.error(` -> Trang ${pageNum} không tồn tại. Kết thúc.`);
-            return { jobs: [], hasNextPage: false };
-        }
-        
-        // Chờ job list
+        // Chờ job list render
         try {
             await page.waitForSelector('.job-item, .job__list--item, .list-jobs .item, [class*="job"], .search-result-item, .matching-scores', { timeout: 15000 });
-            console.error(` -> Job list loaded ở trang ${pageNum}`);
         } catch (e) {
-            console.error(` -> Không tìm thấy job list ở trang ${pageNum}, chờ thêm 5s...`);
-            await new Promise(resolve => setTimeout(resolve, 5000));
+            console.error(` -> Không tìm thấy job list, chờ thêm 5s...`);
+            await new Promise(resolve => setTimeout(resolve, 5000)); // Thay waitForTimeout
         }
         
-        // Cuộn trang 3 lần
-        for (let i = 0; i < 3; i++) {
+        // Cuộn trang 5 lần để tải lazy content
+        for (let i = 0; i < 5; i++) {
             await page.evaluate(() => window.scrollBy(0, window.innerHeight));
             await new Promise(resolve => setTimeout(resolve, 1000));
         }
         
-        // Debug cho trang đầu, retry, và lỗi
-        if (pageNum <= 2 || retry > 0) {
-            await page.screenshot({ path: `debug_screenshot_page_${pageNum}.png`, fullPage: true });
-            const htmlContent = await page.content();
-            fs.writeFileSync(`debug_html_page_${pageNum}.html`, htmlContent);
-            console.error(` -> Đã lưu debug cho trang ${pageNum} (HTML: ${htmlContent.length} ký tự)`);
-        }
+        // Debug: Lưu HTML và screenshot
+        await page.screenshot({ path: `debug_screenshot_page_${pageNum}.png`, fullPage: true });
+        const htmlContent = await page.content();
+        fs.writeFileSync(`debug_html_page_${pageNum}.html`, htmlContent);
+        console.error(` -> Đã lưu debug HTML cho trang ${pageNum} (kích thước: ${htmlContent.length} ký tự)`);
 
         const jobs = await page.evaluate((keyword) => {
             const jobElements = document.querySelectorAll('.job-item, .job__list--item, .list-jobs .item, [class*="job"], .search-result-item, .matching-scores');
-            console.log(` -> Tìm thấy ${jobElements.length} phần tử job tiềm năng ở trang ${pageNum}`);
+            console.log(` -> Tìm thấy ${jobElements.length} phần tử job tiềm năng`); // Log trong evaluate
             
             return Array.from(jobElements).map((el, index) => {
                 const titleEl = el.querySelector('h3 a, .job-title a, .title a, a[href*="/tim-viec-lam/"]');
@@ -150,14 +108,13 @@ async function scrapeHTML(page, pageNum, retry = 0) {
                 const linkEl = el.querySelector('a[href*="/tim-viec-lam/"]') || el.querySelector('a');
                 const link = linkEl ? (linkEl.href.startsWith('http') ? linkEl.href : 'https://careerviet.vn' + linkEl.getAttribute('href')) : 'N/A';
                 
-                const jobId = link.match(/\.([0-9A-F]{8})\.html$/)?.[1] || `job_${pageNum}_${index}`;
+                const jobId = link.match(/\.([0-9A-F]{8})\.html$/)?.[1] || `job_${index}`;
                 
                 return { title, company, location, salary, activeDate, expiryDate, link, jobId };
             }).filter(job => job.title.toLowerCase().includes(keyword.toLowerCase()) && job.title !== 'N/A');
-        }, TARGET_KEYWORD);
+        }, keyword = TARGET_KEYWORD);
 
-        const timeTaken = Date.now() - startTime;
-        console.error(` -> Kết thúc trang ${pageNum} sau ${timeTaken}ms. Job: ${jobs.length}`);
+        console.error(` -> Trích xuất được ${jobs.length} job từ trang ${pageNum}`);
         
         // Kiểm tra nút "Next"
         const hasNextPage = await page.evaluate(() => {
@@ -167,12 +124,7 @@ async function scrapeHTML(page, pageNum, retry = 0) {
         
         return { jobs, hasNextPage };
     } catch (error) {
-        console.error(` -> Lỗi trang ${pageNum}: ${error.message}`);
-        if (retry < RETRY_COUNT) {
-            console.error(` -> Retry trang ${pageNum} lần ${retry + 1} sau 2s...`);
-            await new Promise(resolve => setTimeout(resolve, 2000));
-            return await scrapeHTML(page, pageNum, retry + 1);
-        }
+        console.error(` -> Lỗi khi cào HTML trang ${pageNum}: ${error.message}`);
         return { jobs: [], hasNextPage: false };
     }
 }
@@ -184,18 +136,15 @@ async function scrapeHTML(page, pageNum, retry = 0) {
     let finalFilename = "";
     let pageNum = 1;
     const jobIds = new Set();
-    let browser, page;
-    let currentProxy = null;
-    let proxyApiKey = process.env.PROXY_API_KEY;
-    let proxyApiEndpoint = process.env.PROXY_API_ENDPOINT;
 
+    let browser, page;
     try {
-        ({ browser, page } = await getBrowserContext(currentProxy));
-        console.error(`--- Bắt đầu khai thác dữ liệu CareerViet cho từ khóa: "${TARGET_KEYWORD}" (tối đa ${MAX_PAGES} trang) ---`);
+        ({ browser, page } = await getBrowserContext());
+        console.error(`--- Bắt đầu khai thác dữ liệu CareerViet cho từ khóa: "${TARGET_KEYWORD}" ---`);
 
         while (pageNum <= MAX_PAGES) {
             const { jobs, hasNextPage } = await scrapeHTML(page, pageNum);
-            if (jobs.length === 0 && !hasNextPage) {
+            if (jobs.length === 0) {
                 console.error(` -> Không còn dữ liệu ở trang ${pageNum}. Kết thúc.`);
                 break;
             }
@@ -217,22 +166,11 @@ async function scrapeHTML(page, pageNum, retry = 0) {
 
             allJobs = [...allJobs, ...newJobs];
             console.error(` -> Thêm ${newJobs.length} job mới từ trang ${pageNum}. Tổng: ${allJobs.length}`);
-            
-            // Delay random giữa trang (10-20s) để tránh rate limit
-            const betweenPagesDelay = Math.floor(Math.random() * (20000 - 10000 + 1)) + 10000;
-            console.error(` -> Nghỉ ngơi ${betweenPagesDelay / 1000}s trước trang tiếp theo...`);
-            await new Promise(resolve => setTimeout(resolve, betweenPagesDelay));
-            
             pageNum++;
-
-            // Lấy proxy mới mỗi 20 trang
-            if (pageNum % 20 === 0 && proxyApiKey && proxyApiEndpoint) {
-                console.error(` -> Đang lấy proxy mới cho trang ${pageNum}...`);
-                currentProxy = await getProxy(proxyApiKey, proxyApiEndpoint);
-                if (currentProxy) {
-                    await browser.close();
-                    ({ browser, page } = await getBrowserContext(currentProxy));
-                }
+            
+            if (!hasNextPage) {
+                console.error(` -> Không có trang tiếp theo. Kết thúc phân trang.`);
+                break;
             }
         }
 
