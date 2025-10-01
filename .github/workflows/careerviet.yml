@@ -20,19 +20,16 @@ jobs:
         with:
           node-version: '20'
           
-      - name: 'Install a stable version of Chrome'
-        id: setup_chrome
-        uses: browser-actions/setup-chrome@latest
-        
       - name: 'Install project dependencies'
         run: npm install
+      
+      - name: 'Install axios-retry'
+        run: npm install axios-retry
       
       - name: 'Run CareerViet Scraper'
         id: run_scraper
         env:
-          # Cung cấp secrets cho proxy (nếu có) và đường dẫn Chrome
-          PROXY_URL: ${{ secrets.PROXY_URL_STATIC }} # Gợi ý dùng proxy tĩnh nếu có
-          CHROME_PATH: ${{ steps.setup_chrome.outputs.chrome-path }}
+          PROXY_URL: ${{ secrets.PROXY_URL_STATIC }} # Proxy tĩnh nếu có
         run: node careerviet-scraper.js
       
       - name: 'Commit results to repository'
