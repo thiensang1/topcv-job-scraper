@@ -5,8 +5,6 @@ const { stringify } = require('csv-stringify/sync');
 // --- CẤU HÌNH ---
 const TARGET_KEYWORD = "kế toán";
 const MAX_PAGES = 537; // Giới hạn dựa trên trang cuối cùng
-const PAGES_PER_BROWSER = 20; // Restart browser mỗi 20 trang để tránh memory leak
-const RETRY_COUNT = 3; // Retry mỗi trang nếu lỗi
 const FAKE_USER_AGENTS = [
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
     'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
@@ -29,10 +27,7 @@ async function getBrowserContext() {
             '--disable-setuid-sandbox',
             '--disable-gpu',
             '--disable-dev-shm-usage',
-            '--disable-web-security',
-            '--single-process', // Giảm RAM
-            '--window-size=1920,1080',
-            '--max-old-space-size=4096' // Giới hạn heap size để tránh OOM
+            '--window-size=1920,1080'
         ],
         executablePath: process.env.CHROME_PATH || '/usr/bin/google-chrome'
     });
@@ -59,36 +54,36 @@ async function getBrowserContext() {
     return { browser, page };
 }
 
-async function scrapeHTML(page, pageNum, retry = 0) {
+async function scrapeHTML(page, pageNum) {
+    const startTime = Date.now();
     const url = `${SEARCH_BASE_URL}-${pageNum}-vi.html`;
-    console.error(` -> Đang cào trang ${pageNum} (retry ${retry}/${RETRY_COUNT}): ${url}`);
+    console.error(` -> Bắt đầu trang ${pageNum}: ${url}`);
     
     try {
-        await page.goto(url, { waitUntil: 'networkidle2', timeout: 90000 }); // Tăng timeout lên 90s
-        
-        // Kiểm tra nếu trang 404 hoặc lỗi
-        const pageTitle = await page.title();
-        if (pageTitle.includes('không tìm thấy') || pageTitle.includes('error')) {
-            console.error(` -> Trang ${pageNum} không tồn tại (404). Kết thúc.`);
-            return { jobs: [], hasNextPage: false };
-        }
+        await page.goto(url, { waitUntil: 'networkidle2', timeout: 60000 }); // Giữ 60s như cũ
         
         // Chờ job list
         try {
-            await page.waitForSelector('.job-item, .job__list--item, .list-jobs .item, [class*="job"], .search-result-item, .matching-scores', { timeout: 15000 });
+            await page.waitForSelector('.job-item, .job__list--item, .list-jobs .item, [class*="job"], .search-result-item, .matching-scores', { timeout: 10000 });
         } catch (e) {
             console.error(` -> Không tìm thấy job list ở trang ${pageNum}, chờ thêm...`);
-            await new Promise(resolve => setTimeout(resolve, 5000));
+            await new Promise(resolve => setTimeout(resolve, 3000)); // Giảm chờ
         }
         
-        // Cuộn trang 3 lần (giảm để tăng tốc)
-        for (let i = 0; i < 3; i++) {
+        // Cuộn trang 2 lần (giảm để tăng tốc)
+        for (let i = 0; i < 2; i++) {
             await page.evaluate(() => window.scrollBy(0, window.innerHeight));
             await new Promise(resolve => setTimeout(resolve, 1000));
         }
         
-        // Debug (chỉ lưu cho trang 1, 62, và cuối để tiết kiệm)
-        if (pageNum === 1 || pageNum === 62 || pageNum % 50 === 0) {
+        // Clear cache mỗi 10 trang để tối ưu bộ nhớ (thay restart browser)
+        if (pageNum % 10 === 0) {
+            await page.evaluate(() => window.localStorage.clear());
+            console.error(` -> Đã clear cache tại trang ${pageNum}`);
+        }
+        
+        // Debug (chỉ cho trang quan trọng)
+        if (pageNum === 1 || pageNum === 2 || pageNum === 62 || pageNum % 50 === 0) {
             await page.screenshot({ path: `debug_screenshot_page_${pageNum}.png`, fullPage: true });
             const htmlContent = await page.content();
             fs.writeFileSync(`debug_html_page_${pageNum}.html`, htmlContent);
@@ -127,22 +122,19 @@ async function scrapeHTML(page, pageNum, retry = 0) {
             }).filter(job => job.title.toLowerCase().includes(keyword.toLowerCase()) && job.title !== 'N/A');
         }, TARGET_KEYWORD);
 
-        console.error(` -> Trích xuất ${jobs.length} job từ trang ${pageNum}`);
+        const endTime = Date.now();
+        console.error(` -> Kết thúc trang ${pageNum}: ${jobs.length} job (${(endTime - startTime)/1000}s)`);
         
-        // Kiểm tra nút "Next" (fallback nếu không có, tiếp tục đến MAX_PAGES)
+        // Kiểm tra nút "Next" (không dùng để break, chỉ log)
         const hasNextPage = await page.evaluate(() => {
             const nextButton = document.querySelector('a.next, a.pagination-next, [rel="next"], .next-page');
             return !!nextButton && !nextButton.classList.contains('disabled');
         });
+        console.error(` -> Trang ${pageNum} có trang tiếp: ${hasNextPage}`);
         
         return { jobs, hasNextPage };
     } catch (error) {
         console.error(` -> Lỗi trang ${pageNum}: ${error.message}`);
-        if (retry < RETRY_COUNT) {
-            console.error(` -> Retry trang ${pageNum} lần ${retry + 1}...`);
-            await new Promise(resolve => setTimeout(resolve, 5000)); // Chờ 5s trước retry
-            return await scrapeHTML(page, pageNum, retry + 1);
-        }
         return { jobs: [], hasNextPage: false };
     }
 }
@@ -157,19 +149,15 @@ async function scrapeHTML(page, pageNum, retry = 0) {
     let browser, page;
 
     try {
+        ({ browser, page } = await getBrowserContext());
         console.error(`--- Bắt đầu khai thác dữ liệu CareerViet cho từ khóa: "${TARGET_KEYWORD}" (tối đa ${MAX_PAGES} trang) ---`);
 
         while (pageNum <= MAX_PAGES) {
-            // Restart browser mỗi PAGES_PER_BROWSER trang
-            if (pageNum % PAGES_PER_BROWSER === 1 && pageNum > 1) {
-                console.error(` -> Restart browser tại trang ${pageNum} để tối ưu bộ nhớ...`);
-                if (browser) await browser.close();
-                ({ browser, page } = await getBrowserContext());
-            }
-
-            const { jobs, hasNextPage } = await scrapeHTML(page, pageNum);
-            if (jobs.length === 0 && !hasNextPage) {
-                console.error(` -> Không còn dữ liệu ở trang ${pageNum}. Kết thúc.`);
+            const { jobs } = await scrapeHTML(page, pageNum);
+            
+            // Dừng nếu không có job (không kiểm tra hasNextPage nghiêm ngặt)
+            if (jobs.length === 0) {
+                console.error(` -> Không có job ở trang ${pageNum}. Kết thúc.`);
                 break;
             }
 
