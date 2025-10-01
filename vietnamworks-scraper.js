@@ -88,7 +88,7 @@ async function scrapeAllJobs(jobLevelsMap) {
                 if (job.workingLocations && Array.isArray(job.workingLocations) && job.workingLocations.length > 0) {
                     // Lấy danh sách thành phố duy nhất
                     const uniqueCities = new Set(job.workingLocations.map(loc => loc.cityNameVI));
-                    cityText = [...uniqueCities].join(', ');
+                    cityText = job.workingLocations.map(loc => loc.cityNameVI).join(', ');
 
                     // Lấy danh sách địa chỉ cụ thể
                     addressText = job.workingLocations.map(loc => loc.address).join('; ');
