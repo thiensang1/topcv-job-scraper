@@ -11,7 +11,7 @@ const axios = require('axios');
 puppeteer.use(StealthPlugin());
 
 // --- CẤU HÌNH ---
-const TARGET_KEYWORD = "ke-to-an"; 
+const TARGET_KEYWORD = ""; 
 const BROWSER_TIMEOUT = 120000;
 const PAGE_LOAD_TIMEOUT = 60000;
 const MAX_PAGES_TO_CHECK = 200; 
