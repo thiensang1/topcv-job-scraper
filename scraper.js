@@ -290,6 +290,7 @@ async function ultimateScraper() {
                      break;
                 }
                 jobListings.each((index, element) => {
+                    const jobId = $(element).attr('data-job-id') || null;
                     const titleTag = $(element).find('h3[class*="title"] a');
                     const companyLogoTag = $(element).find('img.w-100.lazy');
                     const salaryTag = $(element).find('.title-salary');
@@ -303,7 +304,7 @@ async function ultimateScraper() {
                         if (nextNode && nextNode.type === 'text') dateText = nextNode.data.trim();
                     }
                     allJobs.push({
-                        'keyword': TARGET_KEYWORD, 'title': titleTag.text().trim() || null, 'link': titleTag.attr('href') ? `https://www.topcv.vn${titleTag.attr('href')}` : null, 'company': companyText, 'salary': salaryTag.text().trim() || 'Thỏa thuận', 'Nơi làm việc': locationTag.text().trim() || null, 'thời gian đăng': convertPostTimeToDate(dateText), 'Kinh nghiệm làm việc tối thiểu': (expTag.text() || '').trim() || null,
+                        'job_id': jobId, 'keyword': TARGET_KEYWORD, 'title': titleTag.text().trim() || null, 'link': titleTag.attr('href') ? `https://www.topcv.vn${titleTag.attr('href')}` : null, 'company': companyText, 'salary': salaryTag.text().trim() || 'Thỏa thuận', 'Nơi làm việc': locationTag.text().trim() || null, 'thời gian đăng': convertPostTimeToDate(dateText), 'Kinh nghiệm làm việc tối thiểu': (expTag.text() || '').trim() || null,
                     });
                 });
                 console.error(`   -> Đã thu thập ${jobListings.length} tin từ trang ${i}.`);
