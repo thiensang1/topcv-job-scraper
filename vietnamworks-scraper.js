@@ -3,8 +3,8 @@ const axios = require('axios');
 const { stringify } = require('csv-stringify/sync');
 
 // --- CẤU HÌNH ---
-const TARGET_KEYWORD = "kế toán";
-const JOBS_PER_PAGE = 50;
+const TARGET_KEYWORD = "";
+const JOBS_PER_PAGE = 10;
 
 // --- API ENDPOINTS ---
 const API_JOB_SEARCH = "https://ms.vietnamworks.com/job-search/v1.0/search";
@@ -96,6 +96,7 @@ async function scrapeAllJobs(jobLevelsMap) {
                 // --- KẾT THÚC PHẦN CẬP NHẬT ---
 
                 return {
+                    'ID': job.jobId , 
                     'Tên công việc': job.jobTitle,
                     'Tên công ty': job.companyName,
                     'Nơi làm việc': cityText,
