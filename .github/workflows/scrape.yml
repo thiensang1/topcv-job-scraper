@@ -57,4 +57,5 @@ jobs:
           git config --global user.email 'actions@github.com'
           git add ${{ steps.run_scraper.outputs.final_filename }}
           git commit -m "📊 Dữ liệu TopCV: Thêm ${{ steps.run_scraper.outputs.jobs_count }} tin mới vào ${{ steps.run_scraper.outputs.final_filename }}"
-          git push
+          git push origin main
+          if: ${{ steps.run-scraper.outputs.final_filename != '' }}
