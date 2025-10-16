@@ -11,7 +11,7 @@ const axios = require('axios');
 puppeteer.use(StealthPlugin());
 
 // --- CẤU HÌNH ---
-const TARGET_KEYWORD = "ke-to-an"; 
+const TARGET_KEYWORD = "ke-toan";  // Fixed typo from "ke-to-an" to "ke-toan"
 const BROWSER_TIMEOUT = 120000;
 const PAGE_LOAD_TIMEOUT = 60000;
 const MAX_PAGES_TO_CHECK = 200; 
@@ -47,8 +47,8 @@ function convertPostTimeToDate(timeString) {
 
 function buildUrl(keyword, page) {
     const BASE_URL = "https://www.topcv.vn";
-    if (keyword === 'ke-to-an') {
-        return `${BASE_URL}/tim-viec-lam-ke-toan-cr392cb393?type_keyword=1&page=${page}&category_family=r392~b393`;
+    if (keyword === 'ke-toan') {
+        return `${BASE_URL}/tim-viec-lam-ke-toan?type_keyword=1&page=${page}`;  // Removed category_family if not necessary, or keep if needed
     } else {
         return `${BASE_URL}/tim-viec-lam-${keyword}?type_keyword=1&page=${page}&sba=1`;
     }
@@ -80,17 +80,23 @@ async function getProxy(apiKey, apiEndpoint) {
 
 // --- CÁC KỊCH BẢN DO THÁM ---
 
-// Kịch bản TỐI ƯU (Kế hoạch A)
+// Kịch bản TỐI ƯU (Kế hoạch A) - Updated to parse total jobs text
 async function discoverPagesByPaginateText(page) {
     const targetUrl = buildUrl(TARGET_KEYWORD, 1);
     console.error(`   -> [Tối ưu] Đang truy cập trang 1 để đọc tổng số trang...`);
     try {
         await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: PAGE_LOAD_TIMEOUT });
-        const selector = '#job-listing-paginate-text';
-        await page.waitForSelector(selector, { timeout: 10000 });
-        const paginateText = await page.$eval(selector, el => el.innerText);
-        const parts = paginateText.split('/');
-        const totalPages = parseInt(parts[1].trim(), 10);
+        // Updated selector: Find text containing "Tìm thấy X tin đăng"
+        const totalTextSelector = 'p, h1';  // Adjust based on actual element
+        const paginateText = await page.evaluate((selector) => {
+            const elements = Array.from(document.querySelectorAll(selector));
+            const text = elements.find(el => el.innerText.includes('Tìm thấy')).innerText;
+            return text;
+        }, totalTextSelector);
+        const match = paginateText.match(/Tìm thấy (\d+(?:\.\d+)?) tin đăng/);
+        const totalJobs = match ? parseInt(match[1].replace('.', '')) : 0;
+        const jobsPerPage = 20;  // Assume 20 jobs per page, adjust if needed by counting on page 1
+        const totalPages = Math.ceil(totalJobs / jobsPerPage);
         if (!isNaN(totalPages) && totalPages > 0) {
             return totalPages;
         }
@@ -102,7 +108,7 @@ async function discoverPagesByPaginateText(page) {
 }
 
 // Kịch bản Dự phòng 1: Tuần tự
-async function discoverPagesLinearly(page) { /* ... (Giữ nguyên) ... */ 
+async function discoverPagesLinearly(page) { 
     let lastKnownGoodPage = 1;
     for (let i = 1; i <= MAX_PAGES_TO_CHECK; i++) {
         const targetUrl = buildUrl(TARGET_KEYWORD, i);
@@ -126,7 +132,7 @@ async function discoverPagesLinearly(page) { /* ... (Giữ nguyên) ... */
 }
 
 // Kịch bản Dự phòng 2: Nhị phân
-async function discoverPagesByBinarySearch(page) { /* ... (Giữ nguyên) ... */ 
+async function discoverPagesByBinarySearch(page) { 
     let low = 1, high = MAX_PAGES_TO_CHECK, lastGood = 1;
     while (low <= high) {
         const mid = Math.floor(low + (high - low) / 2);
@@ -155,7 +161,7 @@ async function discoverPagesByBinarySearch(page) { /* ... (Giữ nguyên) ... */
 }
 
 // Kịch bản Dự phòng 3: Đảo ngược
-async function discoverPagesInReverse(page) { /* ... (Giữ nguyên) ... */ 
+async function discoverPagesInReverse(page) { 
     for (let i = MAX_PAGES_TO_CHECK; i >= 1; i--) {
         const targetUrl = buildUrl(TARGET_KEYWORD, i);
         console.error(`   -> [Đảo ngược] Đang kiểm tra từ trang ${i}...`);
@@ -260,7 +266,7 @@ async function ultimateScraper() {
             console.error(`   -> Đang khai thác trang ${i}/${totalPages} (còn ${pagesUntilNextChange} trang nữa sẽ biến hình)...`);
             try {
                 await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: PAGE_LOAD_TIMEOUT });
-                const jobListSelector = 'div.job-list-search-result';
+                const jobListSelector = 'div.job-list-search-result';  // Kept, but can update if needed
                 console.error("      -> Bắt đầu giai đoạn 'quan sát' để chờ trang ổn định...");
                 await page.waitForSelector(jobListSelector, { timeout: 30000 });
                 let previousHtml = '', currentHtml = '', stabilityCounter = 0;
@@ -284,39 +290,53 @@ async function ultimateScraper() {
                 const selectedCollectionStrategy = collectionStrategies[Math.floor(Math.random() * collectionStrategies.length)];
                 const content = await selectedCollectionStrategy(page);
                 const $ = cheerio.load(content);
-                const jobListings = $('div[class*="job-item"]');
+                let jobListings = $('div[class*="job-item"]');  // Original selector
+                if (jobListings.length === 0) {
+                    // Fallback selector if structure changed
+                    jobListings = $('a[href^="/viec-lam/"]').closest('div');  // Find closest div to job links
+                    console.error("      -> Using fallback selector for job listings.");
+                }
                 if (jobListings.length === 0) {
                      console.error(`   -> Cảnh báo: Trang ${i} không có nội dung. Dừng khai thác.`);
                      break;
                 }
                 jobListings.each((index, element) => {
-                    // Lấy Job ID từ thuộc tính data-job-id của thẻ div chính
-                    const jobId = $(element).attr('data-job-id') || null;
+                    // Updated extraction logic
+                    const jobLinkTag = $(element).find('a[href^="/viec-lam/"]');  // More robust for title link
+                    const title = jobLinkTag.text().trim() || null;
+                    const link = jobLinkTag.attr('href') ? `https://www.topcv.vn${jobLinkTag.attr('href')}` : null;
+                    const jobIdMatch = link ? link.match(/\/(\d+)\.html/) : null;
+                    const jobId = jobIdMatch ? jobIdMatch[1] : null;
 
-                    const titleTag = $(element).find('h3[class*="title"] a');
-                    const companyLogoTag = $(element).find('img.w-100.lazy');
-                    const salaryTag = $(element).find('.title-salary');
-                    const locationTag = $(element).find('.city-text');
+                    const companyLogoTag = $(element).find('img.lazy');  // Updated class if needed
+                    const companyText = companyLogoTag.attr('alt') ? companyLogoTag.attr('alt').trim() : null;
+
+                    const salaryTag = $(element).find('.title-salary, span[class*="salary"]');  // Fallback classes
+                    const salary = salaryTag.text().trim() || 'Thỏa thuận';
+
+                    const locationTag = $(element).find('.city-text, span[class*="location"]');
+                    const location = locationTag.text().trim() || null;
+
                     const dateContainerTag = $(element).find('span.hidden-on-quick-view');
-                    const expTag = $(element).find('.exp');
-                    
-                    let companyText = companyLogoTag.length ? (companyLogoTag.attr('alt') || '').trim() : null;
                     let dateText = null;
                     if (dateContainerTag.length) {
                         const nextNode = dateContainerTag[0].nextSibling;
                         if (nextNode && nextNode.type === 'text') dateText = nextNode.data.trim();
                     }
-                    
+
+                    const expTag = $(element).find('.exp, span[class*="experience"]');
+                    const experience = expTag.text().trim() || null;
+
                     allJobs.push({
-                        'job_id': jobId, // <-- DỮ LIỆU MỚI ĐƯỢC THÊM VÀO ĐÂY
+                        'job_id': jobId,
                         'keyword': TARGET_KEYWORD,
-                        'title': titleTag.text().trim() || null,
-                        'link': titleTag.attr('href') ? `https://www.topcv.vn${titleTag.attr('href')}` : null,
+                        'title': title,
+                        'link': link,
                         'company': companyText,
-                        'salary': salaryTag.text().trim() || 'Thỏa thuận',
-                        'Nơi làm việc': locationTag.text().trim() || null,
+                        'salary': salary,
+                        'Nơi làm việc': location,
                         'thời gian đăng': dateText,
-                        'Kinh nghiệm làm việc tối thiểu': (expTag.text() || '').trim() || null,
+                        'Kinh nghiệm làm việc tối thiểu': experience,
                     });
                 });
                 console.error(`   -> Đã thu thập ${jobListings.length} tin từ trang ${i}.`);
@@ -347,6 +367,7 @@ async function ultimateScraper() {
         console.error(`Đã tổng hợp ${jobsCount} tin duy nhất vào ${finalFilename}`);
     } else {
         console.error('\nKhông có dữ liệu mới để tổng hợp.');
+        finalFilename = '';  // Ensure empty if no data
     }
     const output = `jobs_count=${jobsCount}\nfinal_filename=${finalFilename}\n`;
     fs.appendFileSync(process.env.GITHUB_OUTPUT, output);
