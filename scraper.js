@@ -1,5 +1,5 @@
 // --- ĐIỆP VIÊN ĐƠN ĐỘC (SCRAPER) - PHIÊN BẢN TỐI THƯỢNG ---
-// Cập nhật cho TopCV 2025: Tăng wait, force scroll, debug HTML.
+// Cập nhật: Fix parse total, force load, debug HTML.
 
 const puppeteer = require('puppeteer-extra');
 const StealthPlugin = require('puppeteer-extra-plugin-stealth');
@@ -11,7 +11,7 @@ const axios = require('axios');
 puppeteer.use(StealthPlugin());
 
 // --- CẤU HÌNH ---
-const TARGET_KEYWORD = "ke-toan"; 
+const TARGET_KEYWORD = "ke-to-an"; 
 const BROWSER_TIMEOUT = 120000;
 const PAGE_LOAD_TIMEOUT = 60000;
 const MAX_PAGES_TO_CHECK = 300; 
@@ -47,7 +47,11 @@ function convertPostTimeToDate(timeString) {
 
 function buildUrl(keyword, page) {
     const BASE_URL = "https://www.topcv.vn";
-    return `${BASE_URL}/tim-viec-lam-${keyword}?type_keyword=1&page=${page}`;
+    if (keyword === 'ke-to-an') {
+        return `${BASE_URL}/tim-viec-lam-ke-to-an-cr392cb393?type_keyword=1&page=${page}&category_family=r392~b393`;
+    } else {
+        return `${BASE_URL}/tim-viec-lam-${keyword}?type_keyword=1&page=${page}&sba=1`;
+    }
 }
 
 async function getProxy(apiKey, apiEndpoint) {
@@ -74,6 +78,7 @@ async function getProxy(apiKey, apiEndpoint) {
 }
 
 // --- CÁC KỊCH BẢN DO THÁM ---
+
 // Kịch bản TỐI ƯU (Kế hoạch A)
 async function discoverPagesByPaginateText(page) {
     const targetUrl = buildUrl(TARGET_KEYWORD, 1);
@@ -81,19 +86,18 @@ async function discoverPagesByPaginateText(page) {
     try {
         await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: PAGE_LOAD_TIMEOUT });
         const paginateText = await page.evaluate(() => {
-            const elements = document.querySelectorAll('h1, p, div');
+            const elements = document.querySelectorAll('title, h1, p, div');
             for (let el of elements) {
-                if (el.innerText.includes('Tìm thấy')) {
+                if (el.innerText.includes('Tìm thấy') || el.innerText.includes('Tuyển dụng')) {
                     return el.innerText;
                 }
             }
             return '';
         });
-        const match = paginateText.match(/Tìm thấy (\d+(?:\.\d+)?) tin đăng/);
+        let match = paginateText.match(/Tìm thấy (\d+(?:\.\d+)?) tin đăng/) || paginateText.match(/Tuyển dụng (\d+(?:\.\d+)?) việc làm/);
         const totalJobs = match ? parseInt(match[1].replace(/\./g, '')) : 0;
-        const jobsPerPage = 20; 
+        const jobsPerPage = 20;
         const totalPages = Math.ceil(totalJobs / jobsPerPage);
-        console.error(`   -> [Tối ưu] Tổng jobs: ${totalJobs}, pages: ${totalPages}`);
         if (!isNaN(totalPages) && totalPages > 0) {
             return totalPages;
         }
@@ -104,8 +108,8 @@ async function discoverPagesByPaginateText(page) {
     return 1;
 }
 
-// Kịch bản Dự phòng (giữ nguyên, nhưng update reverse check với selector mới nếu cần)
-async function discoverPagesLinearly(page) { 
+// Kịch bản Dự phòng 1: Tuần tự
+async function discoverPagesLinearly(page) { /* ... (Giữ nguyên) ... */ 
     let lastKnownGoodPage = 1;
     for (let i = 1; i <= MAX_PAGES_TO_CHECK; i++) {
         const targetUrl = buildUrl(TARGET_KEYWORD, i);
@@ -128,7 +132,8 @@ async function discoverPagesLinearly(page) {
     return lastKnownGoodPage;
 }
 
-async function discoverPagesByBinarySearch(page) { 
+// Kịch bản Dự phòng 2: Nhị phân
+async function discoverPagesByBinarySearch(page) { /* ... (Giữ nguyên) ... */ 
     let low = 1, high = MAX_PAGES_TO_CHECK, lastGood = 1;
     while (low <= high) {
         const mid = Math.floor(low + (high - low) / 2);
@@ -156,7 +161,8 @@ async function discoverPagesByBinarySearch(page) {
     return lastGood;
 }
 
-async function discoverPagesInReverse(page) { 
+// Kịch bản Dự phòng 3: Đảo ngược
+async function discoverPagesInReverse(page) { /* ... (Giữ nguyên, update check selector) ... */ 
     for (let i = MAX_PAGES_TO_CHECK; i >= 1; i--) {
         const targetUrl = buildUrl(TARGET_KEYWORD, i);
         console.error(`   -> [Đảo ngược] Đang kiểm tra từ trang ${i}...`);
@@ -167,7 +173,7 @@ async function discoverPagesInReverse(page) {
             const currentUrl = page.url();
             const urlParams = new URLSearchParams(new URL(currentUrl).search);
             const actualPage = parseInt(urlParams.get('page') || '1', 10);
-            if (actualPage >= i && $('div[class*="job-item"]').length > 0) {
+            if (actualPage >= i && $('div.job-item-search-result').length > 0) {
                 console.error(`   -> [Đảo ngược] Trang ${i} hợp lệ. Đây là trang cuối cùng.`);
                 return i;
             }
@@ -179,10 +185,11 @@ async function discoverPagesInReverse(page) {
     return 1;
 }
 
-// --- HÀM DO THÁM CHÍNH ---
+// --- HÀM DO THÁM CHÍNH (Kết hợp Tối ưu và Ngẫu nhiên) ---
 async function discoverTotalPages(page) {
     console.error("\n--- [Điệp viên] Bắt đầu giai đoạn DO THÁM ---");
     
+    // Ưu tiên chạy chiến thuật tối ưu trước (Kế hoạch A)
     try {
         console.error("   -> Đang thử chiến thuật TỐI ƯU (đọc trực tiếp)...");
         const totalPages = await discoverPagesByPaginateText(page);
@@ -192,6 +199,7 @@ async function discoverTotalPages(page) {
         console.error(`   -> ${error.message} Chuyển sang các chiến thuật ngẫu nhiên (Kế hoạch B).`);
     }
 
+    // Nếu Kế hoạch A thất bại, chạy ngẫu nhiên các chiến thuật còn lại (Kế hoạch B)
     const fallbackStrategies = [discoverPagesLinearly, discoverPagesByBinarySearch, discoverPagesInReverse];
     const selectedStrategy = fallbackStrategies[Math.floor(Math.random() * fallbackStrategies.length)];
     
@@ -201,7 +209,9 @@ async function discoverTotalPages(page) {
     return totalPagesFallback;
 }
 
+
 async function initializeBrowser(proxy, chromePath) {
+    // ... (Hàm này giữ nguyên)
     if (!proxy) throw new Error("Không có proxy để khởi tạo trình duyệt.");
     const browserArgs = ['--no-sandbox', '--disable-setuid-sandbox', `--proxy-server=${proxy.host}:${proxy.port}`];
     console.error(`\n[Điệp viên] Đang khởi tạo trình duyệt với danh tính ${proxy.host}...`);
@@ -215,6 +225,7 @@ async function initializeBrowser(proxy, chromePath) {
 }
 
 async function ultimateScraper() {
+    // ... (Toàn bộ các hàm và logic còn lại giữ nguyên y hệt)
     console.error("--- CHIẾN DỊCH 'ĐIỆP VIÊN TỐI THƯỢNG' BẮT ĐẦU ---");
     let browser;
     const allJobs = [];
@@ -228,7 +239,6 @@ async function ultimateScraper() {
         let proxy = await getProxy(process.env.PROXY_API_KEY, process.env.PROXY_API_ENDPOINT);
         browser = await initializeBrowser(proxy, CHROME_EXECUTABLE_PATH);
         let page = await browser.newPage();
-        // Add anti-detection
         await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36');
         await page.setExtraHTTPHeaders({ 'Accept-Language': 'vi-VN,vi;q=0.9' });
         await page.setViewport({ width: 1920, height: 1080 });
@@ -260,13 +270,13 @@ async function ultimateScraper() {
             const targetUrl = buildUrl(TARGET_KEYWORD, i);
             console.error(`   -> Đang khai thác trang ${i}/${totalPages} (còn ${pagesUntilNextChange} trang nữa sẽ biến hình)...`);
             try {
-                await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: PAGE_LOAD_TIMEOUT });
+                await page.goto(targetUrl, { waitUntil: 'networkidle2', timeout: PAGE_LOAD_TIMEOUT });  // Change to networkidle2 for full load
                 const jobListSelector = 'div.job-list-search-result';
                 console.error("      -> Bắt đầu giai đoạn 'quan sát' để chờ trang ổn định...");
-                await page.waitForSelector(jobListSelector, { timeout: 30000 });
+                await page.waitForSelector('div.job-item-search-result', { timeout: 30000 });  // Wait for job item
                 let previousHtml = '', currentHtml = '', stabilityCounter = 0;
-                const requiredStableChecks = 5;  // Tăng để chắc load full
-                for (let check = 0; check < 30; check++) {  // Tăng max
+                const requiredStableChecks = 5;
+                for (let check = 0; check < 30; check++) {
                     currentHtml = await page.$eval(jobListSelector, element => element.innerHTML);
                     if (currentHtml.replace(/\s/g, '') === previousHtml.replace(/\s/g, '') && currentHtml.length > 100) {
                         stabilityCounter++;
@@ -276,7 +286,7 @@ async function ultimateScraper() {
                         stabilityCounter = 0;
                     }
                     previousHtml = currentHtml;
-                    await sleep(3000);  // Tăng delay
+                    await sleep(3000);
                 }
                 if (stabilityCounter < requiredStableChecks) {
                     throw new Error("Trang không ổn định, có thể đã bị chặn hoặc không có nội dung.");
@@ -284,18 +294,16 @@ async function ultimateScraper() {
                 console.error("      -> Trang đã ổn định. Dữ liệu chi tiết đã được tải.");
                 const selectedCollectionStrategy = collectionStrategies[Math.floor(Math.random() * collectionStrategies.length)];
                 await selectedCollectionStrategy(page);
-                // Force full scroll again to load lazy
                 await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
-                await sleep(5000);
+                await sleep(5000);  // Extra wait for dynamic load
                 const content = await page.content();
-                // Debug: Save HTML scraped
-                fs.writeFileSync(`debug_page_${i}.html`, content);
+                fs.writeFileSync(`debug_page_${i}.html`, content);  // Debug
                 console.error(`      -> Saved debug HTML: debug_page_${i}.html`);
                 const $ = cheerio.load(content);
                 let jobListings = $('div[class*="job-item"]');
                 if (jobListings.length === 0) {
-                    jobListings = $('div.job-item-search-result');  // Fallback exact class from HTML
-                    console.error("      -> Sử dụng fallback selector: div.job-item-search-result");
+                    jobListings = $('div.job-item-search-result');
+                    console.error("      -> Using fallback selector div.job-item-search-result");
                 }
                 if (jobListings.length === 0) {
                      console.error(`   -> Cảnh báo: Trang ${i} không có nội dung. Dừng khai thác.`);
@@ -358,7 +366,7 @@ async function ultimateScraper() {
         console.error(`Đã tổng hợp ${jobsCount} tin duy nhất vào ${finalFilename}`);
     } else {
         console.error('\nKhông có dữ liệu mới để tổng hợp.');
-        finalFilename = '';  // Empty để skip git add
+        finalFilename = '';  // Explicit empty
     }
     const output = `jobs_count=${jobsCount}\nfinal_filename=${finalFilename}\n`;
     fs.appendFileSync(process.env.GITHUB_OUTPUT, output);
