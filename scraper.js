@@ -1,5 +1,5 @@
 // --- ĐIỆP VIÊN ĐƠN ĐỘC (SCRAPER) - PHIÊN BẢN TỐI THƯỢNG ---
-// Cập nhật: Parse total pages từ job-listing-paginate-text, fix commit error.
+// Cập nhật: Fix parse job-listing-paginate-text, handle &nbsp;, linh hoạt regex.
 
 const puppeteer = require('puppeteer-extra');
 const StealthPlugin = require('puppeteer-extra-plugin-stealth');
@@ -14,7 +14,7 @@ puppeteer.use(StealthPlugin());
 const TARGET_KEYWORD = "ke-to-an"; 
 const BROWSER_TIMEOUT = 120000;
 const PAGE_LOAD_TIMEOUT = 60000;
-const MAX_PAGES_TO_CHECK = 150; // Giảm để tránh loop quá dài, đủ cover ~112
+const MAX_PAGES_TO_CHECK = 150; // Đủ cover ~113 trang
 
 // --- HÀM TIỆN ÍCH ---
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
@@ -79,7 +79,7 @@ async function getProxy(apiKey, apiEndpoint) {
 
 // --- CÁC KỊCH BẢN DO THÁM ---
 
-// Kế hoạch A: Parse trực tiếp từ job-listing-paginate-text
+// Kế hoạch A: Parse từ job-listing-paginate-text, handle &nbsp;, linh hoạt regex
 async function discoverPagesByPaginateText(page) {
     const targetUrl = buildUrl(TARGET_KEYWORD, 1);
     console.error(`   -> [Tối ưu] Đang truy cập trang 1 để đọc tổng số trang...`);
@@ -87,22 +87,39 @@ async function discoverPagesByPaginateText(page) {
         await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: PAGE_LOAD_TIMEOUT });
         const paginateText = await page.evaluate(() => {
             const span = document.querySelector('#job-listing-paginate-text');
-            return span ? span.innerText : '';
+            if (span) return span.innerText.replace(/\u00A0/g, ' '); // Thay &nbsp; bằng space
+            const elements = document.querySelectorAll('title, h1, p, div');
+            for (let el of elements) {
+                if (el.innerText.includes('Tìm thấy') || el.innerText.includes('Tuyển dụng')) {
+                    return el.innerText.replace(/\u00A0/g, ' ');
+                }
+            }
+            return '';
         });
-        const match = paginateText.match(/\/ (\d+) trang/);
-        const totalPages = match ? parseInt(match[1]) : 0;
-        console.error(`   -> [Tối ưu] Tìm thấy: "${paginateText}", Tổng pages: ${totalPages}`);
+        console.error(`   -> [Tối ưu] Tìm thấy: "${paginateText}"`);
+        // Thử parse từ job-listing-paginate-text trước
+        let match = paginateText.match(/\/ (\d+) trang/) || paginateText.match(/trang \d+ \/ (\d+)/);
+        let totalPages = match ? parseInt(match[1]) : 0;
+        // Fallback parse từ title hoặc h1 nếu cần
+        if (totalPages === 0) {
+            match = paginateText.match(/Tìm thấy (\d+(?:\.\d+)?) tin đăng/) || paginateText.match(/Tuyển dụng (\d+(?:\.\d+)?) việc làm/);
+            if (match) {
+                const totalJobs = parseInt(match[1].replace(/\./g, ''));
+                totalPages = Math.ceil(totalJobs / 20);
+            }
+        }
+        console.error(`   -> [Tối ưu] Tổng pages: ${totalPages}`);
         if (!isNaN(totalPages) && totalPages > 0) {
             return totalPages;
         }
-        throw new Error("Không parse được số trang từ job-listing-paginate-text.");
+        throw new Error("Không parse được số trang từ job-listing-paginate-text hoặc fallback.");
     } catch (error) {
         console.error(`   -> [Tối ưu] Lỗi: ${error.message}`);
         throw new Error("Không thể áp dụng phương pháp do thám tối ưu.");
     }
 }
 
-// Kế hoạch B: Linear (thêm check jobs length)
+// Kế hoạch B: Linear (đã có check length từ trước, giữ nguyên)
 async function discoverPagesLinearly(page) { 
     let lastKnownGoodPage = 1;
     for (let i = 1; i <= MAX_PAGES_TO_CHECK; i++) {
@@ -128,7 +145,7 @@ async function discoverPagesLinearly(page) {
     return lastKnownGoodPage;
 }
 
-// Kế hoạch B: Binary (thêm check jobs length)
+// Kế hoạch B: Binary (đã có check length, giữ nguyên)
 async function discoverPagesByBinarySearch(page) { 
     let low = 1, high = MAX_PAGES_TO_CHECK, lastGood = 1;
     while (low <= high) {
@@ -159,7 +176,7 @@ async function discoverPagesByBinarySearch(page) {
     return lastGood;
 }
 
-// Kế hoạch B: Reverse (đã có check length, giữ nguyên)
+// Kế hoạch B: Reverse (giữ nguyên)
 async function discoverPagesInReverse(page) { 
     for (let i = MAX_PAGES_TO_CHECK; i >= 1; i--) {
         const targetUrl = buildUrl(TARGET_KEYWORD, i);
