@@ -46,12 +46,15 @@ jobs:
         run: node scraper.js
       
       # --- GIAI ĐOẠN 3: TỔNG HỢP VÀ LƯU TRỮ ---
-- name: Commit results to repository
-  run: |
-    git config --global user.name "GitHub Actions"
-    git config --global user.email "actions@github.com"
-    git pull origin main --rebase
-    git add ${{ steps.run-scraper.outputs.final_filename }}
-    git commit -m "Add new scraped data"
-    git push origin main
-  if: ${{ steps.run-scraper.outputs.final_filename != '' }}  # Add this
+      - name: 'Commit results to repository'
+        # Chỉ commit nếu "Điệp viên" báo cáo đã thu thập được dữ liệu
+        if: steps.run_scraper.outputs.jobs_count > 0
+        run: |
+          # Đồng bộ hóa với các file dữ liệu cũ (nếu có) để tránh lỗi push
+          git pull origin main --rebase
+          
+          git config --global user.name 'GitHub Actions Scraper'
+          git config --global user.email 'actions@github.com'
+          git add ${{ steps.run_scraper.outputs.final_filename }}
+          git commit -m "📊 Dữ liệu TopCV: Thêm ${{ steps.run_scraper.outputs.jobs_count }} tin mới vào ${{ steps.run_scraper.outputs.final_filename }}"
+          git push
