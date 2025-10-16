@@ -1,0 +1,24 @@
+name: 🧹 Cleanup Workflow Runs
+
+# Cho phép bạn chạy workflow này thủ công từ tab Actions
+on:
+  workflow_dispatch:
+
+jobs:
+  cleanup-runs:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Delete workflow runs
+        uses: mattraks/delete-workflow-runs@v2
+        with:
+          # Bắt buộc: Cung cấp token để Action có quyền xóa
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+          # --- TÙY CHỈNH THEO Ý BẠN ---
+
+          # Giữ lại các lần chạy trong 10 ngày gần nhất. 
+          # Những lần chạy cũ hơn 10 ngày sẽ bị xóa.
+          retain_days: 1
+
+          # Luôn giữ lại ít nhất 5 lần chạy gần nhất, bất kể chúng cũ thế nào.
+          keep_minimum_runs: 0
