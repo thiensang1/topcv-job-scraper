@@ -18,7 +18,7 @@ jobs:
 
           # Giữ lại các lần chạy trong 10 ngày gần nhất. 
           # Những lần chạy cũ hơn 10 ngày sẽ bị xóa.
-          retain_days: 1
+          retain_days: 0
 
           # Luôn giữ lại ít nhất 5 lần chạy gần nhất, bất kể chúng cũ thế nào.
           keep_minimum_runs: 0
