@@ -46,6 +46,9 @@ jobs:
         run: node scraper.js
       
       # --- GIAI ĐOẠN 3: TỔNG HỢP VÀ LƯU TRỮ ---
+      - name: 'Debug line count of scraper.js'
+        run: cat scraper.js | wc -l
+
       - name: 'Commit results to repository'
         # Chỉ commit nếu "Điệp viên" báo cáo đã thu thập được dữ liệu
         if: steps.run_scraper.outputs.jobs_count != '0' && steps.run_scraper.outputs.final_filename != ''
