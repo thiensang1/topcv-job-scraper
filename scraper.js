@@ -378,10 +378,19 @@ async function ultimateScraper() {
             console.error("\n[Điệp viên] Rút lui an toàn, đã đóng trình duyệt.");
         }
     }
-    if (allJobs.length > 0) {
+if (allJobs.length > 0) {
         const timestamp = new Date().toLocaleString('vi-VN', {year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Asia/Ho_Chi_Minh'}).replace(/, /g, '_').replace(/\//g, '-').replace(/:/g, '-');
         finalFilename = `data/topcv_${TARGET_KEYWORD}_${timestamp}.csv`;
         jobsCount = allJobs.length;
         fs.mkdirSync('data', { recursive: true });
         fs.writeFileSync(finalFilename, '\ufeff' + stringify(allJobs, { header: true }));
-        console.error(`\n--- BÁO 
+        console.error(`\n--- BÁO CÁO NHIỆM VỤ ---`);
+        console.error(`Đã tổng hợp ${jobsCount} tin duy nhất vào ${finalFilename}`);
+    } else {
+        console.error('\nKhông có dữ liệu mới để tổng hợp.');
+    }
+    const output = `jobs_count=${jobsCount}\nfinal_filename=${finalFilename}\n`;
+    fs.appendFileSync(process.env.GITHUB_OUTPUT, output);
+}
+
+ultimateScraper();
