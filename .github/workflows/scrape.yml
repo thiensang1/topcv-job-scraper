@@ -2,7 +2,7 @@ name: 'TopCV Daily Scraper'
 
 on:
   schedule:
-    - cron: '0 0 * * *' # Nửa đêm giờ UTC (7h sáng giờ VN)
+    - cron: '0 0 * * *'
   workflow_dispatch:
 
 jobs:
@@ -36,26 +36,16 @@ jobs:
           CHROME_PATH: ${{ steps.setup_chrome.outputs.chrome-path }}
         run: node scraper.js
       
-      - name: 'Debug output'
-        run: |
-          echo "jobs_count: ${{ steps.run_scraper.outputs.jobs_count }}"
-          echo "final_filename: ${{ steps.run_scraper.outputs.final_filename }}"
-      
       - name: 'Commit results to repository'
-        if: steps.run_scraper.outputs.jobs_count != '0'
+        if: ${{ steps.run_scraper.outputs.jobs_count != '0' }}
         run: |
           git pull origin main --rebase
           git config --global user.name 'GitHub Actions Scraper'
           git config --global user.email 'actions@github.com'
           if [ -f "${{ steps.run_scraper.outputs.final_filename }}" ]; then
             git add "${{ steps.run_scraper.outputs.final_filename }}"
-            git commit -m "📊 Dữ liệu TopCV: Thêm ${{ steps.run_scraper.outputs.jobs_count }} tin mới vào ${{ steps.run_scraper.outputs.final_filename }}"
+            git commit -m "📊 Dữ liệu TopCV: Thêm ${{ steps.run_scraper.outputs.jobs_count }} tin mới vào ${{ steps.run_scraper.outputs.final_filename }}" || echo "No changes to commit"
             git push
           else
             echo "File ${{ steps.run_scraper.outputs.final_filename }} does not exist, skipping commit."
           fi
-
-      - name: 'Handle failure'
-        if: failure()
-        run: |
-          echo "Process failed with exit code $?. Check logs for details."
