@@ -17,7 +17,6 @@ jobs:
       # --- GIAI ĐOẠN 1: CHUẨN BỊ "CĂN CỨ" ---
       - name: 'Checkout repository'
         uses: actions/checkout@v4
-        # Lấy toàn bộ lịch sử để git pull/push hoạt động chính xác
         with:
           fetch-depth: 0 
           
@@ -36,6 +35,9 @@ jobs:
         run: npm install
 
       # --- GIAI ĐOẠN 2: TRIỂN KHAI "ĐIỆP VIÊN" ---
+      - name: 'Debug line count of scraper.js'
+        run: cat scraper.js | wc -l
+
       - name: 'Run Chameleon Scraper'
         id: run_scraper # Đặt ID để lấy output
         env:
@@ -46,9 +48,6 @@ jobs:
         run: node scraper.js
       
       # --- GIAI ĐOẠN 3: TỔNG HỢP VÀ LƯU TRỮ ---
-      - name: 'Debug line count of scraper.js'
-        run: cat scraper.js | wc -l
-
       - name: 'Commit results to repository'
         # Chỉ commit nếu "Điệp viên" báo cáo đã thu thập được dữ liệu
         if: steps.run_scraper.outputs.jobs_count != '0' && steps.run_scraper.outputs.final_filename != ''
