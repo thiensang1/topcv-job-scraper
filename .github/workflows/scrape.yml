@@ -36,8 +36,13 @@ jobs:
           CHROME_PATH: ${{ steps.setup_chrome.outputs.chrome-path }}
         run: node scraper.js
       
+      - name: 'Debug output'
+        run: |
+          echo "jobs_count: ${{ steps.run_scraper.outputs.jobs_count }}"
+          echo "final_filename: ${{ steps.run_scraper.outputs.final_filename }}"
+      
       - name: 'Commit results to repository'
-        if: steps.run_scraper.outputs.jobs_count > 0
+        if: steps.run_scraper.outputs.jobs_count != '0'
         run: |
           git pull origin main --rebase
           git config --global user.name 'GitHub Actions Scraper'
@@ -54,4 +59,3 @@ jobs:
         if: failure()
         run: |
           echo "Process failed with exit code $?. Check logs for details."
-          cat scraper.js.log || echo "No log file found."
