@@ -1,42 +1,57 @@
-name: TopCV Daily Scraper
+name: 'TopCV Daily Scraper'
 
 on:
   schedule:
-    - cron: '0 0 * * *'  # Chạy hàng ngày lúc 7h sáng VN
-  workflow_dispatch:      # Thêm trigger thủ công
+    - cron: '0 0 * * *' # Nửa đêm giờ UTC (7h sáng giờ VN)
+  workflow_dispatch:
 
 jobs:
-  scrape:
+  scrape-and-commit:
     runs-on: ubuntu-latest
+    
     steps:
-      - name: Checkout repository
+      - name: 'Checkout repository'
         uses: actions/checkout@v4
-
-      - name: Install dependencies
+        with:
+          fetch-depth: 0 
+          
+      - name: 'Set up Node.js'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          
+      - name: 'Setup Chrome browser'
+        id: setup_chrome
+        uses: browser-actions/setup-chrome@latest
+        
+      - name: 'Install all project dependencies'
         run: npm install
 
-      - name: Run scraper
-        id: run-scraper
+      - name: 'Run Chameleon Scraper'
+        id: run_scraper
+        env:
+          PROXY_API_ENDPOINT: ${{ secrets.PROXY_API_ENDPOINT }}
+          PROXY_API_KEY: ${{ secrets.PROXY_API_KEY }}
+          CHROME_PATH: ${{ steps.setup_chrome.outputs.chrome-path }}
         run: node scraper.js
-
-      - name: Đồng bộ hóa với các file dữ liệu cũ (nếu có) để tránh lỗi push
+      
+      - name: 'Commit results to repository'
+        if: steps.run_scraper.outputs.jobs_count > 0
         run: |
-          git fetch origin
           git pull origin main --rebase
-
-      - name: Commit results to repository
-        if: steps.run-scraper.outputs.jobs_count != '0' && steps.run-scraper.outputs.final_filename != ''
-        run: |
-          git config --global user.name "GitHub Actions"
-          git config --global user.email "actions@github.com"
-          if [ -f "${{ steps.run-scraper.outputs.final_filename }}" ]; then
-            git add "${{ steps.run-scraper.outputs.final_filename }}"
-            git commit -m "Add new scraped data" || echo "No changes to commit"
-            git push origin main
+          git config --global user.name 'GitHub Actions Scraper'
+          git config --global user.email 'actions@github.com'
+          if [ -f "${{ steps.run_scraper.outputs.final_filename }}" ]; then
+            git add "${{ steps.run_scraper.outputs.final_filename }}"
+            git commit -m "📊 Dữ liệu TopCV: Thêm ${{ steps.run_scraper.outputs.jobs_count }} tin mới vào ${{ steps.run_scraper.outputs.final_filename }}"
+            git push
           else
-            echo "File ${{ steps.run-scraper.outputs.final_filename }} does not exist, skipping commit."
+            echo "File ${{ steps.run_scraper.outputs.final_filename }} does not exist, skipping commit."
           fi
 
-      - name: Handle failure
+      - name: 'Handle failure'
         if: failure()
-        run: echo "Process failed, check logs for details."
+        run: |
+          echo "Process failed with exit code $?. Check logs for details."
+          cat scraper.js.log || echo "No log file found."
