@@ -17,6 +17,7 @@ jobs:
       # --- GIAI ĐOẠN 1: CHUẨN BỊ "CĂN CỨ" ---
       - name: 'Checkout repository'
         uses: actions/checkout@v4
+        # Lấy toàn bộ lịch sử để git pull/push hoạt động chính xác
         with:
           fetch-depth: 0 
           
@@ -35,9 +36,6 @@ jobs:
         run: npm install
 
       # --- GIAI ĐOẠN 2: TRIỂN KHAI "ĐIỆP VIÊN" ---
-      - name: 'Debug line count of scraper.js'
-        run: cat scraper.js | wc -l
-
       - name: 'Run Chameleon Scraper'
         id: run_scraper # Đặt ID để lấy output
         env:
@@ -60,7 +58,7 @@ jobs:
           if [ -f "${{ steps.run_scraper.outputs.final_filename }}" ]; then
             git add "${{ steps.run_scraper.outputs.final_filename }}"
             git commit -m "📊 Dữ liệu TopCV: Thêm ${{ steps.run_scraper.outputs.jobs_count }} tin mới vào ${{ steps.run_scraper.outputs.final_filename }}" || echo "No changes to commit"
-            git push
+            git push || echo "Push failed, skipping."
           else
             echo "File ${{ steps.run_scraper.outputs.final_filename }} does not exist, skipping commit."
           fi
