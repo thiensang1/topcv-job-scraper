@@ -55,7 +55,6 @@ function buildUrl(keyword, page) {
 }
 
 async function getProxy(apiKey, apiEndpoint) {
-    // ... (Hàm này giữ nguyên)
     if (!apiKey || !apiEndpoint) {
         console.error("Cảnh báo: Không có thông tin API Proxy. Chạy không cần proxy.");
         return null;
@@ -385,4 +384,4 @@ async function ultimateScraper() {
         jobsCount = allJobs.length;
         fs.mkdirSync('data', { recursive: true });
         fs.writeFileSync(finalFilename, '\ufeff' + stringify(allJobs, { header: true }));
- 
+        console.error(`\n--- BÁO 
