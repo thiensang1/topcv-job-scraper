@@ -8,9 +8,8 @@ on:
     - cron: '0 0 * * *' # Nửa đêm giờ UTC (7h sáng giờ VN)
   workflow_dispatch:
 
-# Cấp quyền ghi cho Action
 permissions:
-  contents: write
+  contents: write  # Cấp quyền ghi cho Action để push thành công
 
 jobs:
   # --- MỘT JOB DUY NHẤT ĐỂ THỰC HIỆN TOÀN BỘ "CHIẾN DỊCH" ---
@@ -54,15 +53,18 @@ jobs:
         # Chỉ commit nếu "Điệp viên" báo cáo đã thu thập được dữ liệu
         if: steps.run_scraper.outputs.jobs_count != '0' && steps.run_scraper.outputs.final_filename != ''
         run: |
+          # Staging tất cả thay đổi (bao gồm file CSV mới) trước khi pull để tránh unstaged changes
+          git add .
+          
           # Đồng bộ hóa với các file dữ liệu cũ (nếu có) để tránh lỗi push
-          git pull origin main --rebase
+          git pull origin main --rebase || (git fetch origin main && git rebase origin/main)  # Fallback nếu rebase fail
           
           git config --global user.name 'GitHub Actions Scraper'
           git config --global user.email 'actions@github.com'
           if [ -f "${{ steps.run_scraper.outputs.final_filename }}" ]; then
             git add "${{ steps.run_scraper.outputs.final_filename }}"
             git commit -m "📊 Dữ liệu TopCV: Thêm ${{ steps.run_scraper.outputs.jobs_count }} tin mới vào ${{ steps.run_scraper.outputs.final_filename }}" || echo "No changes to commit"
-            git push || echo "Push failed, skipping."
+            git push
           else
             echo "File ${{ steps.run_scraper.outputs.final_filename }} does not exist, skipping commit."
           fi
