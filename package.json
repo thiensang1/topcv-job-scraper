@@ -15,7 +15,8 @@
     "csv-stringify": "^6.4.0",
     "puppeteer": "^22.10.0",
     "puppeteer-extra": "^3.3.6",
-    "puppeteer-extra-plugin-stealth": "^2.11.2"
+    "puppeteer-extra-plugin-stealth": "^2.11.2",
+    "puppeteer-extra-plugin-anonymize-ua": "^2.0.0"
   },
   "overrides": {
     "undici": "5.28.3"
