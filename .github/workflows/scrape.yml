@@ -1,17 +1,23 @@
+# --- QUY TRÌNH TỰ ĐỘNG HÓA CUỐI CÙNG - PHIÊN BẢN "TẮC KÈ HOA" ---
+# Cập nhật: Tái cấu trúc thành quy trình "Điệp viên Đơn độc" và cung cấp "Bản đồ" cho nó.
+
 name: 'TopCV Daily Scraper'
 
 on:
   schedule:
-    - cron: '0 0 * * *'
+    - cron: '0 0 * * *' # Nửa đêm giờ UTC (7h sáng giờ VN)
   workflow_dispatch:
 
 jobs:
+  # --- MỘT JOB DUY NHẤT ĐỂ THỰC HIỆN TOÀN BỘ "CHIẾN DỊCH" ---
   scrape-and-commit:
     runs-on: ubuntu-latest
     
     steps:
+      # --- GIAI ĐOẠN 1: CHUẨN BỊ "CĂN CỨ" ---
       - name: 'Checkout repository'
         uses: actions/checkout@v4
+        # Lấy toàn bộ lịch sử để git pull/push hoạt động chính xác
         with:
           fetch-depth: 0 
           
@@ -21,36 +27,37 @@ jobs:
           node-version: '18'
           cache: 'npm'
           
+      # Thuê "Thợ sửa xe" và Gắn "Thiết bị Định vị"
       - name: 'Setup Chrome browser'
-        id: setup_chrome
+        id: setup_chrome # Đặt ID để lấy output
         uses: browser-actions/setup-chrome@latest
         
       - name: 'Install all project dependencies'
         run: npm install
 
-      - name: 'Debug env vars'
-        run: |
-          echo "CHROME_PATH: ${{ steps.setup_chrome.outputs.path }}"
-          echo "PROXY_API_ENDPOINT: ${{ secrets.PROXY_API_ENDPOINT }}"
-          echo "PROXY_API_KEY: ${{ secrets.PROXY_API_KEY }}"
-
+      # --- GIAI ĐOẠN 2: TRIỂN KHAI "ĐIỆP VIÊN" ---
       - name: 'Run Chameleon Scraper'
-        id: run_scraper
+        id: run_scraper # Đặt ID để lấy output
         env:
           PROXY_API_ENDPOINT: ${{ secrets.PROXY_API_ENDPOINT }}
           PROXY_API_KEY: ${{ secrets.PROXY_API_KEY }}
-          CHROME_PATH: ${{ steps.setup_chrome.outputs.path }}  # Sửa thành 'path'
+          # Cung cấp "Bản đồ Dẫn đường" cho "Điệp viên"
+          CHROME_PATH: ${{ steps.setup_chrome.outputs.chrome-path }}
         run: node scraper.js
       
+      # --- GIAI ĐOẠN 3: TỔNG HỢP VÀ LƯU TRỮ ---
       - name: 'Commit results to repository'
-        if: steps.run_scraper.outputs.jobs_count > 0
+        # Chỉ commit nếu "Điệp viên" báo cáo đã thu thập được dữ liệu
+        if: steps.run_scraper.outputs.jobs_count != '0' && steps.run_scraper.outputs.final_filename != ''
         run: |
+          # Đồng bộ hóa với các file dữ liệu cũ (nếu có) để tránh lỗi push
           git pull origin main --rebase
+          
           git config --global user.name 'GitHub Actions Scraper'
           git config --global user.email 'actions@github.com'
           if [ -f "${{ steps.run_scraper.outputs.final_filename }}" ]; then
             git add "${{ steps.run_scraper.outputs.final_filename }}"
-            git commit -m "📊 Dữ liệu TopCV: Thêm ${{ steps.run_scraper.outputs.jobs_count }} tin mới vào ${{ steps.run_scraper.outputs.final_filename }}"
+            git commit -m "📊 Dữ liệu TopCV: Thêm ${{ steps.run_scraper.outputs.jobs_count }} tin mới vào ${{ steps.run_scraper.outputs.final_filename }}" || echo "No changes to commit"
             git push
           else
             echo "File ${{ steps.run_scraper.outputs.final_filename }} does not exist, skipping commit."
