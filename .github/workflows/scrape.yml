@@ -28,23 +28,29 @@ jobs:
       - name: 'Install all project dependencies'
         run: npm install
 
+      - name: 'Debug env vars'
+        run: |
+          echo "CHROME_PATH: ${{ steps.setup_chrome.outputs.path }}"
+          echo "PROXY_API_ENDPOINT: ${{ secrets.PROXY_API_ENDPOINT }}"
+          echo "PROXY_API_KEY: ${{ secrets.PROXY_API_KEY }}"
+
       - name: 'Run Chameleon Scraper'
         id: run_scraper
         env:
           PROXY_API_ENDPOINT: ${{ secrets.PROXY_API_ENDPOINT }}
           PROXY_API_KEY: ${{ secrets.PROXY_API_KEY }}
-          CHROME_PATH: ${{ steps.setup_chrome.outputs.chrome-path }}
+          CHROME_PATH: ${{ steps.setup_chrome.outputs.path }}  # Sửa thành 'path'
         run: node scraper.js
       
       - name: 'Commit results to repository'
-        if: ${{ steps.run_scraper.outputs.jobs_count != '0' }}
+        if: steps.run_scraper.outputs.jobs_count > 0
         run: |
           git pull origin main --rebase
           git config --global user.name 'GitHub Actions Scraper'
           git config --global user.email 'actions@github.com'
           if [ -f "${{ steps.run_scraper.outputs.final_filename }}" ]; then
             git add "${{ steps.run_scraper.outputs.final_filename }}"
-            git commit -m "📊 Dữ liệu TopCV: Thêm ${{ steps.run_scraper.outputs.jobs_count }} tin mới vào ${{ steps.run_scraper.outputs.final_filename }}" || echo "No changes to commit"
+            git commit -m "📊 Dữ liệu TopCV: Thêm ${{ steps.run_scraper.outputs.jobs_count }} tin mới vào ${{ steps.run_scraper.outputs.final_filename }}"
             git push
           else
             echo "File ${{ steps.run_scraper.outputs.final_filename }} does not exist, skipping commit."
