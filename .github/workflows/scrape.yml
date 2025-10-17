@@ -8,6 +8,10 @@ on:
     - cron: '0 0 * * *' # Nửa đêm giờ UTC (7h sáng giờ VN)
   workflow_dispatch:
 
+# Cấp quyền ghi cho Action
+permissions:
+  contents: write
+
 jobs:
   # --- MỘT JOB DUY NHẤT ĐỂ THỰC HIỆN TOÀN BỘ "CHIẾN DỊCH" ---
   scrape-and-commit:
