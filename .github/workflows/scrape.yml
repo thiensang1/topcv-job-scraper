@@ -49,22 +49,27 @@ jobs:
         run: node scraper.js
       
       # --- GIAI ĐOẠN 3: TỔNG HỢP VÀ LƯU TRỮ ---
-      - name: 'Commit results to repository'
-        # Chỉ commit nếu "Điệp viên" báo cáo đã thu thập được dữ liệu
-        if: steps.run_scraper.outputs.jobs_count != '0' && steps.run_scraper.outputs.final_filename != ''
+      - name: 'Sync, Scrape and Commit'
         run: |
-          # Staging tất cả thay đổi (bao gồm file CSV mới) trước khi pull để tránh unstaged changes
-          git add .
-          
-          # Đồng bộ hóa với các file dữ liệu cũ (nếu có) để tránh lỗi push
-          git pull origin main --rebase || (git fetch origin main && git rebase origin/main)  # Fallback nếu rebase fail
-          
+          # BƯỚC 1: Đồng bộ hóa với remote TRƯỚC KHI làm bất cứ điều gì khác
+          # Điều này đảm bảo chúng ta có phiên bản mới nhất của các file dữ liệu cũ
+          git pull origin main
+
+          # BƯỚC 2: Chạy script để tạo/cập nhật file dữ liệu
+          # (Giả sử bước 'run_scraper' của bạn đã chạy ở trước đó và tạo ra file)
+          # Nếu bạn chưa chạy, hãy đặt lệnh chạy node scraper.js ở đây
+
+          # BƯỚC 3: Cấu hình Git, add, commit và push các thay đổi
           git config --global user.name 'GitHub Actions Scraper'
           git config --global user.email 'actions@github.com'
-          if [ -f "${{ steps.run_scraper.outputs.final_filename }}" ]; then
-            git add "${{ steps.run_scraper.outputs.final_filename }}"
-            git commit -m "📊 Dữ liệu TopCV: Thêm ${{ steps.run_scraper.outputs.jobs_count }} tin mới vào ${{ steps.run_scraper.outputs.final_filename }}" || echo "No changes to commit"
+          
+          # Add tất cả các file đã thay đổi (bao gồm file CSV mới)
+          git add .
+          
+          # Chỉ commit và push nếu có sự thay đổi thực sự
+          if ! git diff --staged --quiet; then
+            git commit -m "📊 Dữ liệu TopCV: Cập nhật dữ liệu tự động"
             git push
           else
-            echo "File ${{ steps.run_scraper.outputs.final_filename }} does not exist, skipping commit."
+            echo "Không có dữ liệu mới để commit."
           fi
