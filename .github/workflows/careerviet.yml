@@ -65,4 +65,3 @@ jobs:
             debug_html_page_*.html
             error_screenshot_careerviet.png
           retention-days: 3
-          
