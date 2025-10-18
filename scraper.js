@@ -14,7 +14,7 @@ puppeteer.use(StealthPlugin());
 const TARGET_KEYWORD = "moi-nhat";
 const BROWSER_TIMEOUT = 120000;
 const PAGE_LOAD_TIMEOUT = 60000;
-const MAX_PAGES_TO_CHECK = 200; 
+const MAX_PAGES_TO_CHECK = 20; 
 
 // --- HÀM TIỆN ÍCH ---
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
