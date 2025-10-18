@@ -63,8 +63,8 @@ jobs:
           git config --global user.name 'GitHub Actions Scraper'
           git config --global user.email 'actions@github.com'
           
-          # Add tất cả các file đã thay đổi (bao gồm file CSV mới)
-          git add .
+          # Add file csv đã thay đổi 
+          git add *.csv
           
           # Chỉ commit và push nếu có sự thay đổi thực sự
           if ! git diff --staged --quiet; then
