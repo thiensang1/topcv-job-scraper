@@ -124,8 +124,9 @@ async function scrapeAllJobs(jobLevelsMap) {
 (async () => {
     const jobLevels = await fetchJobLevels();
     const allJobs = await scrapeAllJobs(jobLevels);
+    const newJobsCount = allJobs.length; // <-- Lưu số lượng jobs vào biến cho dễ dùng
 
-    if (allJobs.length > 0) {
+    if (newJobsCount > 0) {
         const timestamp = new Date().toLocaleString('vi-VN', {
             year: 'numeric', month: '2-digit', day: '2-digit',
             hour: '2-digit', minute: '2-digit', hour12: false,
@@ -138,8 +139,19 @@ async function scrapeAllJobs(jobLevelsMap) {
         fs.writeFileSync(finalFilename, '\ufeff' + stringify(allJobs, { header: true }));
         
         console.error(`\n--- BÁO CÁO NHIỆM VỤ ---`);
-        console.error(`Đã tổng hợp ${allJobs.length} tin việc làm từ VietnamWorks vào file ${finalFilename}`);
+        console.error(`Đã tổng hợp ${newJobsCount} tin việc làm từ VietnamWorks vào file ${finalFilename}`);
     } else {
         console.error('\nKhông có dữ liệu mới để tổng hợp.');
     }
+
+    // --- THÊM KHỐI CODE NÀY VÀO CUỐI HÀM ---
+    try {                                                                         // <-- BẮT ĐẦU PHẦN THÊM
+      const githubOutput = process.env.GITHUB_OUTPUT;
+      if (githubOutput) {
+        fs.appendFileSync(githubOutput, `jobs_count=${newJobsCount}\n`);
+        console.log(`Đã báo cáo jobs_count=${newJobsCount} cho GitHub Actions.`);
+      }
+    } catch (error) {
+      console.error('Lỗi khi ghi output cho GitHub Actions:', error);
+    }                                                                             // <-- KẾT THÚC PHẦN THÊM
 })();
