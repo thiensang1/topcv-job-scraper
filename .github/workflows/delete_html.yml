@@ -9,7 +9,7 @@ on:
       file_pattern:
         description: 'File pattern to delete (e.g., "*.log", "**/temp-*.txt")'
         required: true
-        default: 'build/*.html'
+        default: '*.html'
 
 jobs:
   delete-files-job:
