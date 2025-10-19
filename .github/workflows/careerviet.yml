@@ -2,8 +2,6 @@ name: 'CareerViet Daily Scraper'
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: '0 3,8,13,20 * * *'
 
 jobs:
   scrape-careerviet:
