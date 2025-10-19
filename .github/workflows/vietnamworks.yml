@@ -2,8 +2,6 @@ name: 'VietnamWorks Daily Scraper'
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: '0 1,6,11,18 * * *'
 
 jobs:
   scrape-vietnamworks:
