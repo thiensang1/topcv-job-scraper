@@ -12,7 +12,7 @@ Mục tiêu của dự án là xây dựng một pipeline dữ liệu tự độ
 
 - **Thu thập đa nguồn:** Tự động cào dữ liệu từ 3 trang tuyển dụng hàng đầu: **TopCV**, **VietnamWorks**, và **CareerViet**.
 - **Tự động hóa hoàn toàn:** Toàn bộ quy trình được tự động hóa bằng **GitHub Actions**, tự chạy theo lịch trình (4 lần/ngày), thu thập dữ liệu và commit kết quả vào repository. (hiện tại đã tạm dừng chạy tự động, có thể kích hoạt lại bằng cách thêm schedule và cron)
-- **Kỹ thuật Scraping Nâng cao:** Áp dụng nhiều chiến thuật phức tạp để đối phó với các thách thức khác nhau từ mỗi trang web.
+- **Scraping đa dạng thể loại web:** Áp dụng nhiều chiến thuật phức tạp để đối phó với các thách thức khác nhau từ mỗi trang web.
 - **Khả năng chịu lỗi:** Tích hợp logic xử lý lỗi và cơ chế thử lại để đảm bảo hệ thống hoạt động ổn định.
 
 ## Công cụ đã sử dụng
