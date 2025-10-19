@@ -1,4 +1,4 @@
-# Hệ Thống Tự Động Thu Thập Dữ Liệu Việc Làm (Job Scraper)
+# 🚀 Hệ Thống Tự Động Thu Thập Dữ Liệu Việc Làm (Job Scraper)
 
 Dự án cá nhân xây dựng một hệ thống tự động thu thập, xử lý và lưu trữ dữ liệu việc làm từ nhiều trang tuyển dụng lớn tại Việt Nam, được triển khai hoàn toàn bằng GitHub Actions.
 
