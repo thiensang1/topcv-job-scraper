@@ -25,7 +25,7 @@ Mục tiêu của dự án là xây dựng một pipeline dữ liệu tự độ
 - **Tự động hóa (CI/CD):** GitHub Actions
 - **Lưu trữ:** Dữ liệu được xử lý và lưu dưới định dạng file CSV.
 
-## Cách Hoạt Động & Kiến Trúc
+## Cách Hoạt Động & Cấu Trúc
 
 Hệ thống bao gồm các scrapers độc lập, mỗi scraperđược trang bị kịch bản riêng để đối phó với từng mục tiêu:
 
@@ -36,7 +36,7 @@ Hệ thống bao gồm các scrapers độc lập, mỗi scraperđược trang b
   - Áp dụng chiến thuật chờ trang tải xong hoàn toàn dữ liệu động trước khi khai thác.
   - Triển khai **3 kịch bản do thám ngẫu nhiên dự phòng** (Tuần tự, Nhị phân, Đảo ngược) để tìm tổng số trang một cách khó đoán.
 
-### 2. Scraper VietnamWorks & CareerViet)
+### 2. Scraper VietnamWorks & CareerViet
 - **Thách thức:** Các trang này không hiển thị dữ liệu trực tiếp trên HTML mà gọi qua các API ẩn.
 - **Giải pháp:**
   - Phân tích Network Traffic để tìm ra các **API endpoint** và cấu trúc dữ liệu JSON.
