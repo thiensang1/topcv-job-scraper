@@ -31,10 +31,6 @@ jobs:
       - name: 'Install project dependencies'
         run: npm install puppeteer csv-stringify axios
         
-      # === THAY ĐỔI 1: TẠO .gitignore ĐỂ BỎ QUA node_modules ===
-      - name: 'Create .gitignore'
-        run: echo "node_modules" > .gitignore
-        
       - name: 'Run CareerViet Scraper'
         id: run_scraper
         env:
@@ -50,8 +46,6 @@ jobs:
         with:
           commit_message: "📊 Dữ liệu CareerViet: Thêm ${{ steps.run_scraper.outputs.jobs_count }} tin mới"
           file_pattern: "data/careerviet_*.csv"
-          # === THAY ĐỔI 2: THÊM PULL STRATEGY ĐỂ TRÁNH LỖI non-fast-forward ===
-          pull_strategy: 'rebase'
           
       - name: 'Upload debug artifacts'
         if: always()
