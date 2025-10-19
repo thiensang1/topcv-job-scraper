@@ -4,8 +4,6 @@
 name: 'TopCV Daily Scraper'
 
 on:
-  schedule:
-    - cron: '0 0 * * *' # Nửa đêm giờ UTC (7h sáng giờ VN)
   workflow_dispatch:
 
 permissions:
